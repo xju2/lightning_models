@@ -18,8 +18,6 @@ class Herwig(LightningDataModule):
         data_dir: str = "data/",
         fname: str = "allHadrons_10M_mode4_with_quark_with_pert.npz",
         original_fname: str = "cluster_ML_allHadrons_10M.txt",
-        num_max_hadrons: int = 2,
-        noise_dim: int = 64,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
