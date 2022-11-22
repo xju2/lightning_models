@@ -4,5 +4,5 @@ train_val_test_split: [55_000, 5_000, 10_000]
 num_workers: 0
 pin_memory: False
 core_dataset:
-  _target_: src.datamodules.gan_datamodule.components.herwig.Herwig
+  _target_: src.datamodules.components.herwig.Herwig
   data_dir: "${oc.env:HerwigData}/herwig"
