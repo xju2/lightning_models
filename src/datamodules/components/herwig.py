@@ -18,6 +18,8 @@ class Herwig(LightningDataModule):
         data_dir: str = "data/",
         fname: str = "allHadrons_10M_mode4_with_quark_with_pert.npz",
         original_fname: str = "cluster_ML_allHadrons_10M.txt",
+        num_output_hadrons: int = 2,
+        # hadron_type_embedding_dim: int = 10,
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -62,6 +64,11 @@ class Herwig(LightningDataModule):
             
             
     def create_dataset(self):
+        """"It creates the dataset for training a conditional GAN.
+        Returns:
+            cond_info: conditional information
+            x_truth:   target truth information with conditonal information
+        """
         fname = os.path.join(self.hparams.data_dir, self.hparams.fname)
         arrays = np.load(fname)
         
@@ -69,18 +76,29 @@ class Herwig(LightningDataModule):
         self.cond_dim = cond_info.shape[1]
         
         truth_in = torch.from_numpy(arrays['out_truth'].astype(np.float32))
-        self.output_dim = truth_in.shape[1] - 2
         
-        ## convert particle types to one-hot encoding
-        target_hadron_types = truth_in[:, 2:].reshape(-1).long()
+        ## output includes N hadron types and their momenta
+        ## output dimension only includes the momenta
+        self.output_dim = truth_in.shape[1] - self.hparams.num_output_hadrons
+
+        true_hadron_momenta = truth_in[:, :self.hparams.num_output_hadrons]        
+        ## convert particle IDs to indices
+        ## then these indices can be embedded in N dim. space
+        target_hadron_types = truth_in[:, -self.hparams.num_output_hadrons:].reshape(-1).long()
         target_hadron_types_idx = torch.from_numpy(np.vectorize(
             self.pids_to_ix.get)(target_hadron_types.numpy()))
 
-        num_evts = truth_in.shape[0]
 
-        true_hadron_types = torch.abs(F.one_hot(target_hadron_types_idx, num_classes=self.num_hadron_types) \
-            - torch.rand(num_evts*self.hparams.num_max_hadrons,self.num_hadron_types)*0.001).reshape(num_evts, -1)
-        x_truth = torch.cat([cond_info, truth_in[:, :2], true_hadron_types], dim=1)
+        # num_evts = truth_in.shape[0]
+        # true_hadron_types = F.one_hot(
+        #     target_hadron_types_idx, num_classes=self.num_hadron_types).reshape(
+        #         num_evts, self.hparams.num_output_hadrons, -1)
         
-        return TensorDataset(cond_info, x_truth)
+        # x_truth = torch.cat([
+        #     cond_info,
+        #     truth_in[:, :self.hparams.num_output_hadrons], ## hadron momenta
+        #     true_hadron_types ## hadron types
+        #     ], dim=1)
+        
+        return TensorDataset(cond_info, true_hadron_momenta, target_hadron_types_idx)
         
