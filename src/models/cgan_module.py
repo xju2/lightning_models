@@ -15,14 +15,12 @@ class CondParticleGANModule(LightningModule):
         self,
         noise_dim: int,
         num_particle_ids: int,  ## maximum number of particle types
-        num_output_hadrons: int,  ## number of outgoing hadrons
-        num_particle_kinematics: int,  ## number of kinematic variables
+        num_output_hadrons: int,      ## number of outgoing hadrons
+        num_particle_kinematics: int, ## number of kinematic variables
         generator: torch.nn.Module,
         discriminator: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
-        optimizer_discriminator: torch.optim.Optimizer,
-        scheduler_generator: torch.optim.lr_scheduler,
-        scheduler_discriminator: torch.optim.lr_scheduler,
+        optimizer_discriminator: torch.optim.Optimizer
     ):
         super().__init__()
         
@@ -121,19 +119,21 @@ class CondParticleGANModule(LightningModule):
         pass    
         
     def validation_step(self, batch: Any, batch_idx: int):
-        cond_info, x_truth = batch
-        num_samples, num_dims = x_truth.shape
-        cond_dim = cond_info.shape[1]
-        output_dims = num_dims - cond_dim
-        noise = self.generate_noise(num_samples)
+        cond_info, x_momenta, x_type_indices = batch
+        num_evts, cond_dim = cond_info.shape
+        x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
+            num_evts, -1)
+        x_truth = torch.cat([cond_info, x_momenta, x_types], dim=1)
+
+        ## generate events from the Generator
+        noise = self.generate_noise(num_evts)
         x_input = torch.concat([cond_info, noise], dim=1)
-        
         samples = self.generator(x_input)
         
         ## evaluate the accuracy of hadron types
         ## with likelihood ratio    
         gen_types = samples[:, self.hparams.num_particle_kinematics:].reshape(
-            num_samples* self.hparams.num_particle_ids * self.hparams.num_output_hadrons, -1)
+            num_evts* self.hparams.num_particle_ids * self.hparams.num_output_hadrons, -1)
         log_probability = F.log_softmax(gen_types, dim=1)
         loss_types = float(F.nll_loss(log_probability,
                                       x_truth[:, cond_dim+self.hparams.num_particle_kinematics:]))
@@ -161,5 +161,7 @@ class CondParticleGANModule(LightningModule):
         pass
     
     def configure_optimizers(self):
-        return [self.hparams.optimizer_generator, self.hparams.optimizer_discriminator], \
-               [self.hparams.scheduler_generator, self.hparams.scheduler_discriminator]
+        opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters())
+        opt_disc = self.hparams.optimizer_discriminator(params=self.discriminator.parameters())
+        
+        return [opt_gen, opt_disc], []

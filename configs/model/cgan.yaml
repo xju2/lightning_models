@@ -9,28 +9,12 @@ optimizer_generator:
   _partial_: true
   lr: 0.00001
   betas: [0.5, 0.999]
-  weight_decay: 0.0
 
 optimizer_discriminator:
   _target_: torch.optim.Adam
   _partial_: true
   lr: 0.00005
   betas: [0.5, 0.999]
-  weight_decay: 0.0
-
-scheduler_generator:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  _partial_: true
-  mode: min
-  factor: 0.1
-  patience: 10
-
-scheduler_discriminator:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  _partial_: true
-  mode: min
-  factor: 0.1
-  patience: 10
 
 generator:
   _target_: src.models.components.mlp.MyMLPMoudle
