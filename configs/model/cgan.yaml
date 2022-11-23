@@ -27,8 +27,10 @@ generator:
 
 discriminator:
   _target_: src.models.components.mlp.MyMLPMoudle
-  input_dim: 656
+  input_dim: 654
   hidden_dims: [128, 128]
   output_dim: 1
   layer_norm: true
   dropout: 0.0
+  last_activation:
+    _target_: torch.nn.Sigmoid

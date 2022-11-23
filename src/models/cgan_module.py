@@ -2,12 +2,11 @@ from typing import Any, List, Optional
 
 import torch
 import torch.nn.functional as F
-
 from pytorch_lightning import LightningModule
+from scipy import stats
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
-from scipy import stats
 
 class CondParticleGANModule(LightningModule):
     """Conditional GAN predicting particle momenta and types"""
@@ -60,30 +59,25 @@ class CondParticleGANModule(LightningModule):
         real_label = 1
         fake_label = 0
         
-        
         cond_info, x_momenta, x_type_indices = batch
         num_evts = cond_info.shape[0]
-        
-        x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
-            num_evts, -1)
-        x_truth = torch.cat([cond_info, x_momenta, x_types], dim=1)
+        device = x_momenta.device
         
 
-        noise = self.generate_noise(num_evts)
-        
-        label = torch.full((num_evts,), real_label, dtype=torch.float)
+        noise = self.generate_noise(num_evts).to(device)
+        label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         ## Train generator
         if optimizer_idx == 0:
-            x_fake = torch.concat([cond_info, noise], dim=1)
+            
+            x_fake = noise if cond_info is None else torch.concat([cond_info, noise], dim=1)
             fakes = self.generator(x_fake)
             
             # particle_kinematics = fakes[:, :-self.hparams.num_particle_ids]
             # particle_types = fakes[:, -self.hparams.num_particle_ids:].reshape(
             #     num_evts* self.hparams.num_particle_ids, -1)
             # log_probability = F.log_softmax(particle_types, dim=1)
-            
-            x_generated = torch.cat([cond_info, fakes], dim=1)
-            score_fakes = self.discriminator(self.generator(x_generated))
+            x_generated = fakes if cond_info is None else torch.cat([cond_info, fakes], dim=1)
+            score_fakes = self.discriminator(x_generated).squeeze()
             loss_gen = self.criterion(score_fakes, label)
             
             ## update and log metrics
@@ -94,7 +88,13 @@ class CondParticleGANModule(LightningModule):
         
         ##  Train discriminator   
         if optimizer_idx == 1:
-            ## with real batch  
+            ## with real batch
+            x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
+            if x_type_indices is not None:
+                x_types = F.one_hot(x_type_indices.reshape(-1), num_classes=self.hparams.num_particle_ids).reshape(
+                    num_evts, -1)
+                x_truth = torch.cat([x_truth, x_types], dim=1)
+                
             score_truth = self.discriminator(x_truth).squeeze()
             loss_real = self.criterion(score_truth, label)
 
@@ -130,25 +130,21 @@ class CondParticleGANModule(LightningModule):
 
         avg_nll = 0
         if x_type_indices is not None:
-            x_type_indices = x_type_indices.reshape(-1)
-            x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
-                num_evts, self.hparams.num_output_hadrons, -1)
             
             ## evaluate the accuracy of hadron types
             ## with likelihood ratio
             for pidx in range(self.hparams.num_output_hadrons):
                 gen_types = samples[:, self.hparams.num_particle_kinematics+pidx*self.hparams.num_particle_ids:self.hparams.num_particle_kinematics+(pidx+1)*self.hparams.num_particle_ids]
                 log_probability = F.log_softmax(gen_types, dim=1)
-                print(gen_types.shape)
-                print(log_probability.shape)
                 nll = float(F.nll_loss(log_probability,
-                                    x_types[:, pidx, :]))
+                                    x_type_indices[:, pidx]))
                 avg_nll += nll
                 
             avg_nll = avg_nll / self.hparams.num_output_hadrons
         
         ## compute the WD for the particle kinmatics
         samples = samples.cpu().detach().numpy()
+        x_momenta = x_momenta.cpu().detach().numpy()
         
         distances = [
             stats.wasserstein_distance(samples[:, idx], x_momenta[:, idx]) \

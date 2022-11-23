@@ -1,6 +1,6 @@
 _target_: src.datamodules.gan_datamodule.GANDataModule
 batch_size: 128
-num_workers: 0
+num_workers: 4
 pin_memory: False
 core_dataset:
   _target_: src.datamodules.components.herwig.Herwig

@@ -1,16 +1,10 @@
-from typing import Any, Dict, Optional, Tuple
 import abc
-from abc import ABC
-
-## for data processing
-import numpy as np
-import pandas as pd
-
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import TensorDataset
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, TensorDataset, random_split
+
 
 class GANDataBase(LightningDataModule):
     """Base class for GAN data"""

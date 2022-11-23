@@ -1,5 +1,5 @@
 """Multilayer Perceptron (MLP) module."""
-from typing import List
+from typing import List, Optional
 try:
     from itertools import pairwise
 except ImportError:
@@ -19,6 +19,7 @@ class MyMLPMoudle(nn.Module):
         output_dim: int,
         layer_norm: bool = True,
         dropout: float = 0.0,
+        last_activation: Optional[torch.nn.Module] = None,
         # <TODO, add activation function>
     ):
         super().__init__()
@@ -28,7 +29,15 @@ class MyMLPMoudle(nn.Module):
         self.hidden_dims = hidden_dims
         self.layer_norm = layer_norm
         self.dropout = dropout
-
+        self.last_activation = last_activation
+        self.leaky_ratio = 0.2
+        # activations = {
+        #     'relu': nn.ReLU(),
+        #     'sigmoid': nn.Sigmoid(),
+        #     'tanh': nn.Tanh()
+        # }
+        self.last_act = None if last_activation is None else last_activation
+            
         # build the model
         self.model = nn.Sequential(*self._build_layers())
         
@@ -37,7 +46,8 @@ class MyMLPMoudle(nn.Module):
     
 
     def _build_layers(self) -> List[nn.Module]:
-        layer_list = [torch.nn.Linear(self.input_dim, self.hidden_dims[0])]
+        layer_list = [torch.nn.Linear(self.input_dim, self.hidden_dims[0]),
+            torch.nn.LeakyReLU(self.leaky_ratio)]
         
         
         for l0,l1 in pairwise(self.hidden_dims):
@@ -46,12 +56,15 @@ class MyMLPMoudle(nn.Module):
             if self.layer_norm:
                 layer_list.append(torch.nn.LayerNorm(l1))
 
-            layer_list.append(torch.nn.LeakyReLU(0.2))
+            layer_list.append(torch.nn.LeakyReLU(self.leaky_ratio))
             
             if self.dropout > 0:
                 layer_list.append(torch.nn.Dropout(self.dropout))
 
         layer_list.append(torch.nn.Linear(self.hidden_dims[-1], self.output_dim))
+        if self.last_act is not None:
+            layer_list.append(self.last_act)
+
         return layer_list
     
     
