@@ -65,7 +65,7 @@ class GANDataModule(LightningDataModule):
         careful not to execute things like random split twice!
         """
         if not self.data_train and not self.data_val and not self.data_test:
-            dataset = TensorDataset(self.core_dataset.create_dataset())
+            dataset = TensorDataset(*self.core_dataset.create_dataset())
 
             self.data_train, self.data_val, self.data_test = random_split(
                 dataset=dataset,
