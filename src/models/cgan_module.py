@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -9,11 +9,14 @@ from torchmetrics.classification.accuracy import Accuracy
 
 from scipy import stats
 
-class CGANModule(LightningModule):
+class CondParticleGANModule(LightningModule):
+    """Conditional GAN predicting particle momenta and types"""
     def __init__(
         self,
         noise_dim: int,
-        num_max_hadrons: int,
+        num_particle_ids: int,  ## maximum number of particle types
+        num_output_hadrons: int,  ## number of outgoing hadrons
+        num_particle_kinematics: int,  ## number of kinematic variables
         generator: torch.nn.Module,
         discriminator: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
@@ -59,17 +62,29 @@ class CGANModule(LightningModule):
         real_label = 1
         fake_label = 0
         
-        cond_info, x_truth = batch
         
-        num_evts = x_truth.shape[0]
+        cond_info, x_momenta, x_type_indices = batch
+        num_evts = cond_info.shape[0]
+        
+        x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
+            num_evts, -1)
+        x_truth = torch.cat([cond_info, x_momenta, x_types], dim=1)
+        
+
         noise = self.generate_noise(num_evts)
         
         label = torch.full((num_evts,), real_label, dtype=torch.float)
         ## Train generator
         if optimizer_idx == 0:
             x_fake = torch.concat([cond_info, noise], dim=1)
-            fake = self.generator(x_fake)
-            x_generated = torch.cat([cond_info, fake], dim=1)
+            fakes = self.generator(x_fake)
+            
+            # particle_kinematics = fakes[:, :-self.hparams.num_particle_ids]
+            # particle_types = fakes[:, -self.hparams.num_particle_ids:].reshape(
+            #     num_evts* self.hparams.num_particle_ids, -1)
+            # log_probability = F.log_softmax(particle_types, dim=1)
+            
+            x_generated = torch.cat([cond_info, fakes], dim=1)
             score_fakes = self.discriminator(self.generator(x_generated))
             loss_gen = self.criterion(score_fakes, label)
             
@@ -117,9 +132,11 @@ class CGANModule(LightningModule):
         
         ## evaluate the accuracy of hadron types
         ## with likelihood ratio    
-        gen_types = samples[:, 2:].reshape(num_samples* self.hparams.num_max_hadrons, -1)
+        gen_types = samples[:, self.hparams.num_particle_kinematics:].reshape(
+            num_samples* self.hparams.num_particle_ids * self.hparams.num_output_hadrons, -1)
         log_probability = F.log_softmax(gen_types, dim=1)
-        loss_types = float(F.nll_loss(log_probability, x_truth[:, cond_dim+2:]))
+        loss_types = float(F.nll_loss(log_probability,
+                                      x_truth[:, cond_dim+self.hparams.num_particle_kinematics:]))
         
         ## compute the WD for the first two angle variables
         ## eta and phi.
@@ -127,7 +144,7 @@ class CGANModule(LightningModule):
         
         distances = [
             stats.wasserstein_distance(samples[:, idx], x_truth[:, cond_dim+idx]) \
-                for idx in range(2)
+                for idx in range(self.hparams.num_particle_kinematics)
         ]
         wd_distance = sum(distances)/len(distances)
         
@@ -144,5 +161,5 @@ class CGANModule(LightningModule):
         pass
     
     def configure_optimizers(self):
-        return [self.optimizer_generator, self.optimizer_discriminator], \
-               [self.scheduler_generator, self.scheduler_discriminator]
+        return [self.hparams.optimizer_generator, self.hparams.optimizer_discriminator], \
+               [self.hparams.scheduler_generator, self.hparams.scheduler_discriminator]

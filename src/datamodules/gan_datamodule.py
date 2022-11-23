@@ -16,7 +16,6 @@ class GANDataModule(LightningDataModule):
     def __init__(
         self,
         core_dataset: LightningDataModule,
-        train_val_test_split: Tuple[int, int, int] = (1_000_000, 50_000, 50_000),
         batch_size: int = 5000,
         num_workers: int = 12,
         pin_memory: bool = False,
@@ -50,7 +49,7 @@ class GANDataModule(LightningDataModule):
             dataset = self.core_dataset.create_dataset()
             self.data_train, self.data_val, self.data_test = random_split(
                 dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
+                lengths=self.core_dataset.hparams.train_val_test_split,
                 generator=torch.Generator().manual_seed(42),
             )
             

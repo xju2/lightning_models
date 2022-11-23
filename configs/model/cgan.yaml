@@ -1,6 +1,8 @@
-_target_: src.models.cgan_module.CGANModule
-noise_dim: 64
-num_max_hadrons: 2
+_target_: src.models.cgan_module.CondParticleGANModule
+noise_dim: 128
+num_particle_ids: 322
+num_output_hadrons: 2
+num_particle_kinematics: 2
 
 optimizer_generator:
   _target_: torch.optim.Adam
@@ -16,33 +18,33 @@ optimizer_discriminator:
   betas: [0.5, 0.999]
   weight_decay: 0.0
 
-# scheduler_generator:
-#   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-#   _partial_: true
-#   mode: min
-#   factor: 0.1
-#   patience: 10
+scheduler_generator:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
 
-# scheduler_discriminator:
-#   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-#   _partial_: true
-#   mode: min
-#   factor: 0.1
-#   patience: 10
+scheduler_discriminator:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
 
 generator:
-  _target_: src.models.components.simple_dense_net.SimpleDenseNet
-  input_size: 784
-  lin1_size: 64
-  lin2_size: 128
-  lin3_size: 64
-  output_size: 10
+  _target_: src.models.components.mlp.MyMLPMoudle
+  input_dim: 136
+  hidden_dims: [256, 256]
+  output_dim: 646
+  layer_norm: true
+  dropout: 0.0
 
 
 discriminator:
-  _target_: src.models.components.simple_dense_net.SimpleDenseNet
-  input_size: 784
-  lin1_size: 64
-  lin2_size: 128
-  lin3_size: 64
-  output_size: 10
+  _target_: src.models.components.mlp.MyMLPMoudle
+  input_dim: 656
+  hidden_dims: [128, 128]
+  output_dim: 1
+  layer_norm: true
+  dropout: 0.0
