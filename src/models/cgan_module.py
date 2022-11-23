@@ -120,41 +120,49 @@ class CondParticleGANModule(LightningModule):
         
     def validation_step(self, batch: Any, batch_idx: int):
         cond_info, x_momenta, x_type_indices = batch
-        num_evts, cond_dim = cond_info.shape
-        x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
-            num_evts, -1)
-        x_truth = torch.cat([cond_info, x_momenta, x_types], dim=1)
-
+        num_evts, _ = x_momenta.shape
+        
         ## generate events from the Generator
-        noise = self.generate_noise(num_evts)
-        x_input = torch.concat([cond_info, noise], dim=1)
+        x_input = self.generate_noise(num_evts).to(x_momenta.device)
+        if cond_info is not None:
+            x_input = torch.concat([cond_info, x_input], dim=1)
         samples = self.generator(x_input)
+
+        avg_nll = 0
+        if x_type_indices is not None:
+            x_type_indices = x_type_indices.reshape(-1)
+            x_types = F.one_hot(x_type_indices, num_classes=self.hparams.num_particle_ids).reshape(
+                num_evts, self.hparams.num_output_hadrons, -1)
+            
+            ## evaluate the accuracy of hadron types
+            ## with likelihood ratio
+            for pidx in range(self.hparams.num_output_hadrons):
+                gen_types = samples[:, self.hparams.num_particle_kinematics+pidx*self.hparams.num_particle_ids:self.hparams.num_particle_kinematics+(pidx+1)*self.hparams.num_particle_ids]
+                log_probability = F.log_softmax(gen_types, dim=1)
+                print(gen_types.shape)
+                print(log_probability.shape)
+                nll = float(F.nll_loss(log_probability,
+                                    x_types[:, pidx, :]))
+                avg_nll += nll
+                
+            avg_nll = avg_nll / self.hparams.num_output_hadrons
         
-        ## evaluate the accuracy of hadron types
-        ## with likelihood ratio    
-        gen_types = samples[:, self.hparams.num_particle_kinematics:].reshape(
-            num_evts* self.hparams.num_particle_ids * self.hparams.num_output_hadrons, -1)
-        log_probability = F.log_softmax(gen_types, dim=1)
-        loss_types = float(F.nll_loss(log_probability,
-                                      x_truth[:, cond_dim+self.hparams.num_particle_kinematics:]))
-        
-        ## compute the WD for the first two angle variables
-        ## eta and phi.
+        ## compute the WD for the particle kinmatics
         samples = samples.cpu().detach().numpy()
         
         distances = [
-            stats.wasserstein_distance(samples[:, idx], x_truth[:, cond_dim+idx]) \
+            stats.wasserstein_distance(samples[:, idx], x_momenta[:, idx]) \
                 for idx in range(self.hparams.num_particle_kinematics)
         ]
         wd_distance = sum(distances)/len(distances)
         
         ## update and log metrics
         self.val_wd(wd_distance)
-        self.val_nll(loss_types)
+        self.val_nll(avg_nll)
         self.log("val_wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val_nll", loss_types, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
         
-        return {"wd": wd_distance, "nll": loss_types, "preds": samples}
+        return {"wd": wd_distance, "nll": avg_nll, "preds": samples}
         
         
     def validaton_epoch_end(self, outputs: List[Any]):

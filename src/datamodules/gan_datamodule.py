@@ -73,6 +73,7 @@ class GANDataModule(LightningDataModule):
                 generator=torch.Generator().manual_seed(42),
             )
             
+            
     def train_dataloader(self):
         return DataLoader(
             dataset=self.data_train,
