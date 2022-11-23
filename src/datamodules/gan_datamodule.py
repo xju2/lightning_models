@@ -1,21 +1,40 @@
-import os
-import pickle
 from typing import Any, Dict, Optional, Tuple
+import abc
+from abc import ABC
 
 ## for data processing
 import numpy as np
 import pandas as pd
 
 
-
 import torch
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, TensorDataset
+from torch.utils.data import TensorDataset
+from torch.utils.data import DataLoader, Dataset, random_split
 
+class GANDataBase(LightningDataModule):
+    """Base class for GAN data"""
+    
+    @abc.abstractmethod
+    def prepare_data(self):
+        """Prepare data for training and validation. Before the create_dataset is called."""
+        pass
+    
+    @abc.abstractmethod
+    def create_dataset(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Create dataset from core dataset.
+        Returns:
+            torch.Tensor: conditioinal information
+            torch.Tensor: particle kinematics
+            torch.Tensor: particle types
+        """
+        pass
+    
+    
 class GANDataModule(LightningDataModule):
     def __init__(
         self,
-        core_dataset: LightningDataModule,
+        core_dataset: GANDataBase,
         batch_size: int = 5000,
         num_workers: int = 12,
         pin_memory: bool = False,
@@ -46,7 +65,8 @@ class GANDataModule(LightningDataModule):
         careful not to execute things like random split twice!
         """
         if not self.data_train and not self.data_val and not self.data_test:
-            dataset = self.core_dataset.create_dataset()
+            dataset = TensorDataset(self.core_dataset.create_dataset())
+
             self.data_train, self.data_val, self.data_test = random_split(
                 dataset=dataset,
                 lengths=self.core_dataset.hparams.train_val_test_split,

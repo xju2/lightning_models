@@ -7,12 +7,10 @@ import numpy as np
 import pandas as pd
 
 import torch
-import torch.nn.functional as F
-from pytorch_lightning import LightningDataModule
-from torch.utils.data import TensorDataset
+from src.datamodules.gan_datamodule import GANDataBase
 
 
-class Herwig(LightningDataModule):
+class Herwig(GANDataBase):
     def __init__(
         self, 
         data_dir: str = "data/",
@@ -66,7 +64,7 @@ class Herwig(LightningDataModule):
             pickle.dump(self.pids_to_ix, open(self.pids_map_fname, "wb"))
             
             
-    def create_dataset(self):
+    def create_dataset(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """"It creates the dataset for training a conditional GAN.
         Returns:
             cond_info: conditional information
@@ -113,8 +111,9 @@ class Herwig(LightningDataModule):
         #     true_hadron_types ## hadron types
         #     ], dim=1)
         self.summarize()
+        return (cond_info, true_hadron_momenta, target_hadron_types_idx)
         
-        return TensorDataset(cond_info, true_hadron_momenta, target_hadron_types_idx)
+        # return TensorDataset(cond_info, true_hadron_momenta, target_hadron_types_idx)
     
     
     def summarize(self):
