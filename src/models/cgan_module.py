@@ -84,7 +84,7 @@ class CondParticleGANModule(LightningModule):
             self.train_loss_gen(loss_gen)
             self.log("lossG", loss_gen, prog_bar=True)
             
-            return {"lossG": loss_gen}
+            return {"loss": loss_gen}
         
         ##  Train discriminator   
         if optimizer_idx == 1:
@@ -112,7 +112,7 @@ class CondParticleGANModule(LightningModule):
             ## update and log metrics
             self.train_loss_disc(loss_disc)
             self.log("lossD", loss_disc, prog_bar=True)
-            return {"lossD": loss_disc}
+            return {"loss": loss_disc}
 
     def training_epoch_end(self, outputs: List[Any]):
         # `outputs` is a list of dicts returned from `training_step()`
