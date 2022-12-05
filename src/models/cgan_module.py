@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 
 import torch
 import torch.nn.functional as F
@@ -45,6 +45,11 @@ class CondParticleGANModule(LightningModule):
     def forward(self, x: torch.Tensor):
         return self.generator(x)
     
+    def configure_optimizers(self):
+        opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters())
+        opt_disc = self.hparams.optimizer_discriminator(params=self.discriminator.parameters())
+        
+        return [opt_gen, opt_disc], []
     
     def generate_noise(self, num_evts: int):
         return torch.randn(num_evts, self.hparams.noise_dim)
@@ -65,12 +70,11 @@ class CondParticleGANModule(LightningModule):
         
 
         noise = self.generate_noise(num_evts).to(device)
-        label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         ## Train generator
         if optimizer_idx == 0:
             
             x_fake = noise if cond_info is None else torch.concat([cond_info, noise], dim=1)
-            fakes = self.generator(x_fake)
+            fakes = self(x_fake)
             
             # particle_kinematics = fakes[:, :-self.hparams.num_particle_ids]
             # particle_types = fakes[:, -self.hparams.num_particle_ids:].reshape(
@@ -78,6 +82,8 @@ class CondParticleGANModule(LightningModule):
             # log_probability = F.log_softmax(particle_types, dim=1)
             x_generated = fakes if cond_info is None else torch.cat([cond_info, fakes], dim=1)
             score_fakes = self.discriminator(x_generated).squeeze()
+            
+            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
             loss_gen = self.criterion(score_fakes, label)
             
             ## update and log metrics
@@ -96,16 +102,18 @@ class CondParticleGANModule(LightningModule):
                 x_truth = torch.cat([x_truth, x_types], dim=1)
                 
             score_truth = self.discriminator(x_truth).squeeze()
+            
+            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
             loss_real = self.criterion(score_truth, label)
 
             ## with fake batch
             x_fake = torch.concat([cond_info, noise], dim=1)
-            fake = self.generator(x_fake)
+            fake = self(x_fake).detach()
             x_generated = torch.cat([cond_info, fake], dim=1)
             
-            score_fakes = self.discriminator(x_generated.detach()).squeeze()
-            label.fill_(fake_label)
-            loss_fake = self.criterion(score_fakes, label)
+            score_fakes = self.discriminator(x_generated).squeeze()
+            fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
+            loss_fake = self.criterion(score_fakes, fake_labels)
             
             loss_disc = (loss_real + loss_fake) / 2
             
@@ -118,7 +126,9 @@ class CondParticleGANModule(LightningModule):
         # `outputs` is a list of dicts returned from `training_step()`
         pass    
         
-    def validation_step(self, batch: Any, batch_idx: int):
+    def step(self, batch: Any, batch_idx: int) -> Dict[str, torch.Tensor]:    
+        """Common steps for valiation and testing"""
+        
         cond_info, x_momenta, x_type_indices = batch
         num_evts, _ = x_momenta.shape
         
@@ -130,7 +140,6 @@ class CondParticleGANModule(LightningModule):
 
         avg_nll = 0
         if x_type_indices is not None:
-            
             ## evaluate the accuracy of hadron types
             ## with likelihood ratio
             for pidx in range(self.hparams.num_output_hadrons):
@@ -152,20 +161,51 @@ class CondParticleGANModule(LightningModule):
         ]
         wd_distance = sum(distances)/len(distances)
         
+        return {"wd": wd_distance, "nll": avg_nll, "preds": samples}
+    
+        
+    def validation_step(self, batch: Any, batch_idx: int):
+        """Validation step"""
+        perf = self.step(batch, batch_idx)
+        wd_distance = perf['wd']
+        avg_nll = perf['nll']
+        
         ## update and log metrics
         self.val_wd(wd_distance)
         self.val_nll(avg_nll)
+        self.val_wd_best(wd_distance)
+        self.val_nll_best(avg_nll)
         self.log("val_wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
         
-        return {"wd": wd_distance, "nll": avg_nll, "preds": samples}
-        
+        return perf
         
     def validaton_epoch_end(self, outputs: List[Any]):
-        pass
-    
-    def configure_optimizers(self):
-        opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters())
-        opt_disc = self.hparams.optimizer_discriminator(params=self.discriminator.parameters())
+        wd = self.val_wd.compute()
+        self.val_wd_best(wd)
+        # log `val_wd_best` as a value through `.compute()` method, instead of as a metric object
+        # otherwise metric would be reset by lightning after each epoch
+        self.log("val/wd_best", self.val_wd_best.compute(), prog_bar=True)
         
-        return [opt_gen, opt_disc], []
+        ## similiarly for NLL
+        nll = self.val_nll.compute()
+        self.val_nll_best(nll)
+        self.log("val/nll_best", self.val_nll_best.compute(), prog_bar=True)
+    
+
+    def test_step(self, batch: Any, batch_idx: int):
+        """Test step"""
+        perf = self.step(batch, batch_idx)
+        wd_distance = perf['wd']
+        avg_nll = perf['nll']
+        
+        ## update and log metrics
+        self.val_wd(wd_distance)
+        self.val_nll(avg_nll)
+        self.log("test_wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
+        
+        return perf
+    
+    def test_epoch_end(self, outputs: List[Any]):
+        pass
