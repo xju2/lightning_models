@@ -1,0 +1,35 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=herwig_all_hadron
+## to add a logger
+# python train.py experiment=herwig_all_hadron logger=wandb
+
+defaults:
+  - override /datamodule: herwig.yaml
+  - override /model: cgan.yaml
+  - override /callbacks: default.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["herwig", "allhadrons"]
+
+seed: 12345
+
+
+## override /datamodule:
+datamodule:
+  batch_size: 5_000
+  core_dataset:
+    train_val_test_split: [5_000_000, 100_000, 100_000]
+
+
+## override /model:
+model:
+  generator:
+    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256]
+
+  discriminator:
+    hidden_dims: [128, 128, 128, 128, 128, 128, 128, 128]

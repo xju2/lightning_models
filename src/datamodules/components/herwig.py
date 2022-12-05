@@ -79,7 +79,7 @@ class Herwig(GANDataBase):
         num_tot_evts, self.cond_dim = cond_info.shape
         num_asked_evts = sum(self.hparams.train_val_test_split)
         
-        print(f"Number of events: {num_tot_evts}, asking for {num_asked_evts}")
+        print(f"Number of events: {num_tot_evts:,}, asking for {num_asked_evts:,}")
         if num_tot_evts < num_asked_evts:
             raise ValueError(f"Number of events {num_tot_evts} is less than asked {num_asked_evts}")
         
