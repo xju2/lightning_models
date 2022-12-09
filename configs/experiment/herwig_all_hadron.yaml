@@ -18,18 +18,21 @@ tags: ["herwig", "allhadrons"]
 
 seed: 12345
 
-
+trainer:
+  max_epochs: 200
+  
 ## override /datamodule:
 datamodule:
   batch_size: 5_000
   core_dataset:
-    train_val_test_split: [5_000_000, 100_000, 100_000]
+    train_val_test_split: [5_000_000, 20_000, 20_000]
 
 
 ## override /model:
 model:
   generator:
-    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256]
+    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
 
   discriminator:
-    hidden_dims: [128, 128, 128, 128, 128, 128, 128, 128]
+    encoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
+    decoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]

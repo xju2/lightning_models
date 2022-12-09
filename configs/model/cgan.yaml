@@ -37,3 +37,11 @@ discriminator:
   output_dim: 1
   last_activation:
     _target_: torch.nn.Sigmoid
+
+comparison_fn:
+  _target_: src.metrics.compare_fn.CompareParticles
+  xlabels: ["phi", "eta"]
+  num_kinematics: ${model.num_particle_kinematics}
+  num_particles: ${model.num_output_particles}
+  outdir: ${paths.output_dir}
+
