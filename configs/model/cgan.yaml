@@ -1,23 +1,24 @@
 _target_: src.models.cgan_module.CondParticleGANModule
 noise_dim: 128
+cond_info_dim: 8
 num_particle_ids: 322
-num_output_hadrons: 2
+num_output_particles: 2
 num_particle_kinematics: 2
 
 optimizer_generator:
   _target_: torch.optim.Adam
   _partial_: true
   lr: 0.00001
-  betas: [0.5, 0.999]
+  betas: [0.9, 0.999]
 
 optimizer_discriminator:
   _target_: torch.optim.Adam
   _partial_: true
   lr: 0.00005
-  betas: [0.5, 0.999]
+  betas: [0.9, 0.999]
 
 generator:
-  _target_: src.models.components.mlp.MyMLPMoudle
+  _target_: src.models.components.mlp.MLPModule
   input_dim: 136
   hidden_dims: [256, 256]
   output_dim: 646
@@ -26,11 +27,13 @@ generator:
 
 
 discriminator:
-  _target_: src.models.components.mlp.MyMLPMoudle
-  input_dim: 654
-  hidden_dims: [128, 128]
+  _target_: src.models.components.mlp.MLPWithEmbeddingModule
+  input_dim: 10 # ${model.cond_info_dim} + ${model.num_particle_kinematics}
+  vocab_size: ${model.num_particle_ids}
+  word_embedding_dim: 32
+  num_words: ${model.num_output_particles}
+  encoder_dims: [128, 128]
+  decoder_dims: [128, 128]
   output_dim: 1
-  layer_norm: true
-  dropout: 0.0
   last_activation:
     _target_: torch.nn.Sigmoid

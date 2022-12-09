@@ -9,9 +9,38 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def build_linear_layers(
+    input_dim: int,
+    hidden_dims: List[int],
+    output_dim: int,
+    layer_norm: bool = True,
+    dropout: float = 0.0,
+    last_activation: Optional[torch.nn.Module] = None,
+    leaky_ratio: float = 0.2,
+    ) -> List[nn.Module]:
+    
+    layer_list = [torch.nn.Linear(input_dim, hidden_dims[0]),
+        torch.nn.LeakyReLU(leaky_ratio)]
+    
+    
+    for l0,l1 in pairwise(hidden_dims):
+        layer_list.append(torch.nn.Linear(l0, l1))
 
+        if layer_norm:
+            layer_list.append(torch.nn.LayerNorm(l1))
 
-class MyMLPMoudle(nn.Module):
+        layer_list.append(torch.nn.LeakyReLU(leaky_ratio))
+        
+        if dropout > 0:
+            layer_list.append(torch.nn.Dropout(dropout))
+
+    layer_list.append(torch.nn.Linear(hidden_dims[-1], output_dim))
+    if last_activation is not None:
+        layer_list.append(last_activation)
+
+    return layer_list
+
+class MLPModule(nn.Module):
     def __init__(
         self,
         input_dim: int,
@@ -20,54 +49,71 @@ class MyMLPMoudle(nn.Module):
         layer_norm: bool = True,
         dropout: float = 0.0,
         last_activation: Optional[torch.nn.Module] = None,
-        # <TODO, add activation function>
     ):
         super().__init__()
-        
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.hidden_dims = hidden_dims
-        self.layer_norm = layer_norm
-        self.dropout = dropout
-        self.last_activation = last_activation
-        self.leaky_ratio = 0.2
-        # activations = {
-        #     'relu': nn.ReLU(),
-        #     'sigmoid': nn.Sigmoid(),
-        #     'tanh': nn.Tanh()
-        # }
-        self.last_act = None if last_activation is None else last_activation
-            
-        # build the model
-        self.model = nn.Sequential(*self._build_layers())
+                    
+        # build the linear model
+        self.model = nn.Sequential(*build_linear_layers(
+            input_dim, hidden_dims, output_dim, layer_norm, dropout, last_activation)
+        )
         
     def forward(self, x) -> torch.Tensor:
         return self.model(x)
-    
 
-    def _build_layers(self) -> List[nn.Module]:
-        layer_list = [torch.nn.Linear(self.input_dim, self.hidden_dims[0]),
-            torch.nn.LeakyReLU(self.leaky_ratio)]
-        
-        
-        for l0,l1 in pairwise(self.hidden_dims):
-            layer_list.append(torch.nn.Linear(l0, l1))
 
-            if self.layer_norm:
-                layer_list.append(torch.nn.LayerNorm(l1))
+class MLPTypeEmbeddingModule(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        embedding_dim: int,
+        hidden_dims: List[int],
+        output_dim: int,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.embeddings = nn.Embedding(vocab_size, embedding_dim)
 
-            layer_list.append(torch.nn.LeakyReLU(self.leaky_ratio))
             
-            if self.dropout > 0:
-                layer_list.append(torch.nn.Dropout(self.dropout))
+        # build the linear model
+        self.model = nn.Sequential(*build_linear_layers(
+            embedding_dim, hidden_dims, output_dim, True, dropout)
+        )
+        
+    def forward(self, x) -> torch.Tensor:
+        batch_size = x.shape[0]
+        x = x.view(-1)
+        embeds = self.embeddings(x).view(batch_size, -1)
+        return  self.model(embeds)
 
-        layer_list.append(torch.nn.Linear(self.hidden_dims[-1], self.output_dim))
-        if self.last_act is not None:
-            layer_list.append(self.last_act)
 
-        return layer_list
-    
+class MLPWithEmbeddingModule(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        vocab_size: int,
+        word_embedding_dim: int,
+        num_words: int,
+        encoder_dims: List[int],
+        decoder_dims: List[int],
+        output_dim: int,
+        last_activation: Optional[torch.nn.Module] = None,
+    ):
+        super().__init__()
+
+        self.normal_mlp = MLPModule(input_dim, encoder_dims, encoder_dims[-1])
+        self.type_mlp = MLPTypeEmbeddingModule(vocab_size, word_embedding_dim, encoder_dims, encoder_dims[-1])
+        self.decoder = MLPModule(encoder_dims[-1]*(1+num_words), decoder_dims, output_dim, last_activation=last_activation)
+        
+    def forward(self, x, type_ids) -> torch.Tensor:
+        normal_embeds = self.normal_mlp(x)
+        num_particles = type_ids.shape[1]
+        
+        ## same MLP acting on different particles
+        type_embeds = [self.type_mlp(type_ids[:, i]) for i in range(num_particles)]
+        
+        decoder_embds = self.decoder(torch.cat([normal_embeds]+type_embeds, dim=1))
+        return decoder_embds
     
 if __name__ == "__main__":
-    model = MyMLPMoudle(784, [256, 256, 256], 10)
+    model = MLPModule(784, [256, 256, 256], 10)
     print(model)

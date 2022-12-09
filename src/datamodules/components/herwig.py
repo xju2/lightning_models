@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 
 import torch
-from src.datamodules.gan_datamodule import GANDataBase
+from pytorch_lightning import LightningDataModule
 
-
-class Herwig(GANDataBase):
+class Herwig(LightningDataModule):
     def __init__(
         self, 
         data_dir: str = "data/",
@@ -112,8 +111,6 @@ class Herwig(GANDataBase):
         #     ], dim=1)
         self.summarize()
         return (cond_info, true_hadron_momenta, target_hadron_types_idx)
-        
-        # return TensorDataset(cond_info, true_hadron_momenta, target_hadron_types_idx)
     
     
     def summarize(self):

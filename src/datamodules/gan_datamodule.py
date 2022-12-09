@@ -1,20 +1,18 @@
 import abc
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Protocol
 
 import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset, TensorDataset, random_split
 
 
-class GANDataBase(LightningDataModule):
-    """Base class for GAN data"""
+class GANDataProtocol(Protocol):
+    """Define a protocol for GAN data modules."""
     
-    @abc.abstractmethod
-    def prepare_data(self):
-        """Prepare data for training and validation. Before the create_dataset is called."""
-        pass
+    def prepare_data(self) -> None:
+        """Prepare data for training and validation.
+        Before the create_dataset function is called."""
     
-    @abc.abstractmethod
     def create_dataset(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Create dataset from core dataset.
         Returns:
@@ -22,13 +20,11 @@ class GANDataBase(LightningDataModule):
             torch.Tensor: particle kinematics
             torch.Tensor: particle types
         """
-        pass
-    
-    
+
 class GANDataModule(LightningDataModule):
     def __init__(
         self,
-        core_dataset: GANDataBase,
+        core_dataset: GANDataProtocol,
         batch_size: int = 5000,
         num_workers: int = 12,
         pin_memory: bool = False,
@@ -44,14 +40,11 @@ class GANDataModule(LightningDataModule):
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
         
-    
     def prepare_data(self):
         ## read the original file, determine the number of particle types
         ## and create a map.
         self.core_dataset.prepare_data()
 
-            
-    
     def setup(self, stage: Optional[str] = None):
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
 
