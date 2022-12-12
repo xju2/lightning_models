@@ -53,8 +53,8 @@ class CondParticleGANModule(LightningModule):
         self.val_nll = MeanMetric()
         
         # for tracking best so far
-        self.val_wd_best = MinMetric()
-        self.val_nll_best = MinMetric()
+        self.val_min_avg_wd = MinMetric()
+        self.val_min_avg_nll = MinMetric()
         
         self.test_wd = MeanMetric()
         self.test_nll = MeanMetric()
@@ -83,8 +83,10 @@ class CondParticleGANModule(LightningModule):
     def on_train_start(self):
         # by default lightning executes validation step sanity checks before training starts,
         # so we need to make sure val_acc_best doesn't store accuracy from these checks
-        self.val_wd_best.reset()
-        self.val_nll_best.reset()
+        self.val_min_avg_wd.reset()
+        self.val_min_avg_nll.reset()
+        self.test_wd_best.reset()
+        self.test_nll_best.reset()
         
     def training_step(self, batch: Any, batch_idx: int, optimizer_idx: int):
         real_label = 1
@@ -186,15 +188,13 @@ class CondParticleGANModule(LightningModule):
         return {"wd": wd_distance, "nll": avg_nll, "preds": predictions, "truths": truths}
     
 
-    def compare(self, perf, outname) -> None:
+    def compare(self, predictions, truths, outname) -> None:
         """Compare the generated events with the real ones
         Parameters:
             perf: dictionary from the step function
         """
         if self.comparison_fn is not None:
             ## compare the generated events with the real ones
-            truths = perf['truths']
-            predictions = perf['preds']
             self.comparison_fn(predictions, truths, outname)
             
             
@@ -207,31 +207,36 @@ class CondParticleGANModule(LightningModule):
         ## update and log metrics
         self.val_wd(wd_distance)
         self.val_nll(avg_nll)
-        self.val_wd_best(wd_distance)
-        self.val_nll_best(avg_nll)
         self.log("val_wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
         
         return perf, batch_idx
         
     def validaton_epoch_end(self, outputs: List[Any]):
+        ## `outputs` is a list of dicts returned from `validation_step()`
+        
         wd = self.val_wd.compute()
-        self.val_wd_best(wd)
-        # log `val_wd_best` as a value through `.compute()` method, instead of as a metric object
+        self.val_min_avg_wd(wd)
+        
+        # log `val_min_avg_wd` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
-        self.log("val/wd_best", self.val_wd_best.compute(), prog_bar=True)
+        self.log("val/min_avg_wd", self.val_min_avg_wd.compute(), prog_bar=True)
         
         ## similiarly for NLL
         nll = self.val_nll.compute()
-        self.val_nll_best(nll)
-        self.log("val/nll_best", self.val_nll_best.compute(), prog_bar=True)
+        self.val_min_avg_nll(nll)
+        self.log("val/min_avg_nll", self.val_min_avg_nll.compute(), prog_bar=True)
         
         ## comparison
-        perf, batch_idx = outputs[0]
-        if self.val_nll.compute() < self.val_nll_best.compute() or \
-            self.val_wd.compute() < self.val_wd_best.compute():
+        print("Best WD: ", self.val_min_avg_wd.compute(), "Best NLL: ", self.val_min_avg_nll.compute())
+        print("WD: ", wd, "NLL: ", nll)
+        if nll < self.val_min_avg_nll.compute() or \
+            wd < self.val_min_avg_wd.compute():
+            perf, batch_idx = outputs[0]
             outname = f"val-{self.current_epoch}-{batch_idx}"
-            self.compare(perf, outname)
+            predictions = perf['preds']
+            truths = perf['truths']
+            self.compare(predictions, truths, outname)
     
 
     def test_step(self, batch: Any, batch_idx: int):
@@ -243,16 +248,14 @@ class CondParticleGANModule(LightningModule):
         ## update and log metrics
         self.test_wd(wd_distance)
         self.test_nll(avg_nll)
-        self.log("test_wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test/wd", wd_distance, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test/nll", avg_nll, on_step=False, on_epoch=True, prog_bar=True)
 
         return perf, batch_idx
     
     def test_epoch_end(self, outputs: List[Any]):
         wd = self.test_wd.compute()
         self.test_wd_best(wd)
-        # log `val_wd_best` as a value through `.compute()` method, instead of as a metric object
-        # otherwise metric would be reset by lightning after each epoch
         self.log("test/wd_best", self.test_wd_best.compute(), prog_bar=True)
         
         ## similiarly for NLL
@@ -261,9 +264,9 @@ class CondParticleGANModule(LightningModule):
         self.log("test/nll_best", self.test_nll_best.compute(), prog_bar=True)
         
         ## comparison
-        perf, batch_idx = outputs[0]
         if self.test_nll.compute() < self.test_nll_best.compute() or \
             self.test_wd.compute() < self.test_wd_best.compute():
+            perf, batch_idx = outputs[0]
             outname = f"test-{self.current_epoch}-{batch_idx}"
             self.compare(perf, outname)
     
