@@ -20,6 +20,7 @@ class Herwig(LightningDataModule):
         num_particle_kinematics: int = 2,
         # hadron_type_embedding_dim: int = 10,
     ):
+        """This is for the GAN datamodule"""
         super().__init__()
         self.save_hyperparameters(logger=False)
         
@@ -98,17 +99,6 @@ class Herwig(LightningDataModule):
         target_hadron_types_idx = torch.from_numpy(np.vectorize(
             self.pids_to_ix.get)(target_hadron_types.numpy())).reshape(-1, self.hparams.num_output_hadrons)
         
-
-        # num_evts = truth_in.shape[0]
-        # true_hadron_types = F.one_hot(
-        #     target_hadron_types_idx, num_classes=self.num_hadron_types).reshape(
-        #         num_evts, self.hparams.num_output_hadrons, -1)
-        
-        # x_truth = torch.cat([
-        #     cond_info,
-        #     truth_in[:, :self.hparams.num_output_hadrons], ## hadron momenta
-        #     true_hadron_types ## hadron types
-        #     ], dim=1)
         self.summarize()
         return (cond_info, true_hadron_momenta, target_hadron_types_idx)
     

@@ -18,7 +18,8 @@ optimizer_discriminator:
   betas: [0.9, 0.999]
 
 generator:
-  _target_: src.models.components.mlp_res.ResMLPModule
+  _target_: src.models.components.mlp.MLPModule
+  # _target_: src.models.components.mlp_res.ResMLPModule
   input_dim: 136
   hidden_dims: [256, 256]
   output_dim: 646
@@ -43,5 +44,7 @@ comparison_fn:
   xlabels: ["phi", "eta"]
   num_kinematics: ${model.num_particle_kinematics}
   num_particles: ${model.num_output_particles}
-  outdir: ${paths.output_dir}
+  num_particle_ids: ${model.num_particle_ids}
+  outdir: ${paths.output_dir}/images
+
 

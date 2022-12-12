@@ -22,7 +22,7 @@ tags: ["herwig", "allhadrons"]
 seed: 12345
 
 trainer:
-  max_epochs: 200
+  max_epochs: 5
   
 ## override /datamodule:
 datamodule:

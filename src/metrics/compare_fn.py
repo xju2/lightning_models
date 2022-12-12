@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Optional
 from pytorch_lightning.core.mixins import HyperparametersMixin
 
@@ -18,6 +19,7 @@ class CompareParticles(HyperparametersMixin):
         xlabels: List[str],
         num_kinematics: int,
         num_particles: int,
+        num_particle_ids: int,
         outdir: Optional[str] = None,
         xranges: Optional[List[Tuple[float, float]]] = None,
         xbins: Optional[List[int]] = None,
@@ -37,8 +39,11 @@ class CompareParticles(HyperparametersMixin):
         xlabels = self.hparams.xlabels
         
         outname = "test" if tags is None else tags
-        if self.hparams.outdir:
+        if self.hparams.outdir is not None:
+            os.makedirs(self.hparams.outdir, exist_ok=True)
             outname = os.path.join(self.hparams.outdir, outname)
+        else:
+            outname = None
 
         axs = create_plots(1, self.hparams.num_kinematics)
         config = dict(histtype='step', lw=2, density=True)
@@ -54,29 +59,30 @@ class CompareParticles(HyperparametersMixin):
             ax.set_ylim(0, max_y)
             ax.legend()
 
-        if outname:
+        if outname is not None:
             plt.savefig(outname+"-angles.png")
             plt.savefig(outname+"-angles.pdf")
         plt.close('all')
         
-        ## figure out predicted hadron type
-        axs = create_plots(1, self.hparams.num_particles)
-        ranges = (-0.5, self.hparams.num_particles+0.5)
-        bins = self.hparams.num_particles + 1
-        num_hadrons = self.hparams.num_particles
-        for idx in range(num_hadrons):
-            sim_hadron_types  = predictions[:, self.hparams.num_kinematics+idx].long()
-            true_hadron_types = truths[:, self.hparams.num_kinematics+idx].long()
+        ## figure out predicted particle type
+        num_particles = self.hparams.num_particles
+        axs = create_plots(1, num_particles)
+        ranges = (-0.5, self.hparams.num_particle_ids+0.5)
+        bins = self.hparams.num_particle_ids + 1
+
+        for idx in range(num_particles):
+            sim_particle_types  = predictions[:, self.hparams.num_kinematics+idx]
+            true_particle_types = truths[:, self.hparams.num_kinematics+idx]
             
             ax = axs[idx]
-            yvals, _, _ = ax.hist(true_hadron_types, bins=bins, range=ranges, label='Truth', **config)
+            yvals, _, _ = ax.hist(true_particle_types, bins=bins, range=ranges, label='Truth', **config)
             max_y = np.max(yvals) * 1.1
-            ax.hist(sim_hadron_types, bins=bins, range=ranges, label='Generator', **config)
-            ax.set_xlabel(r"{}".format(f"{idx}th Hadron Type"))
+            ax.hist(sim_particle_types, bins=bins, range=ranges, label='Generator', **config)
+            ax.set_xlabel(r"{}".format(f"{idx}th particle type"))
             ax.set_ylim(0, max_y)
             ax.legend()
 
-        if outname:
+        if outname is not None:
             plt.savefig(outname+"-types.png")
             plt.savefig(outname+"-types.pdf")
         plt.close('all')

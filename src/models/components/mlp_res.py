@@ -11,12 +11,11 @@ class ResidualBlock(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        output_dim: int,
     ):
         super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_dim, output_dim),
-            nn.BatchNorm1d(output_dim),
+            nn.Linear(input_dim, input_dim),
+            nn.BatchNorm1d(input_dim),
             nn.ReLU()
             )
 
@@ -24,10 +23,12 @@ class ResidualBlock(nn.Module):
         return self.model(x) + x
     
 
-def build_layers(block, input_dim, hidden_dims, output_dim):
-    layers = [block(input_dim, hidden_dims[0])]
+def build_layers(input_dim, hidden_dims, output_dim):
+    layers = [nn.Linear(input_dim, hidden_dims[0]), nn.ReLU()]
     for l0, l1 in pairwise(hidden_dims):
-        layers.append(block(l0, l1))
+        layers.append(ResidualBlock(l0))
+        layers.append(nn.Linear(l0, l1))
+        layers.append(nn.ReLU())
     layers.append(nn.Linear(hidden_dims[-1], output_dim))
     return layers
 
@@ -39,8 +40,7 @@ class ResMLPModule(nn.Module):
                  last_activation = None):
         super().__init__()
         
-        block = ResidualBlock
-        layers = build_layers(block, input_dim, hidden_dims, output_dim)
+        layers = build_layers(input_dim, hidden_dims, output_dim)
         if last_activation is not None:
             layers.append(last_activation)
 
