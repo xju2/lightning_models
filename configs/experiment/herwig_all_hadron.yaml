@@ -24,7 +24,6 @@ seed: 12345
 trainer:
   max_epochs: 100
   val_check_interval: 20
-  check_val_every_n_epoch: None
   
 ## override /datamodule:
 datamodule:
