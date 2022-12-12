@@ -19,3 +19,7 @@ check_val_every_n_epoch: 1
 deterministic: False
 
 detect_anomaly: True
+
+## Effective training techniques
+# gradient_clip_val: 0.5
+# gradient_clip_algorithm: norm 

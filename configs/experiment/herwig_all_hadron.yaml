@@ -1,9 +1,12 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=herwig_all_hadron
+# python src/train.py experiment=herwig_all_hadron
 ## to add a logger
-# python train.py experiment=herwig_all_hadron logger=wandb
+# python src/train.py experiment=herwig_all_hadron logger=wandb
+
+## with training techniques
+# python src/train.py experiment=herwig_all_hadron logger=wandb +trainer.gradient_clip_val=0.5
 
 defaults:
   - override /datamodule: herwig.yaml
@@ -25,7 +28,7 @@ trainer:
 datamodule:
   batch_size: 5_000
   core_dataset:
-    train_val_test_split: [5_000_000, 20_000, 20_000]
+    train_val_test_split: [50_000, 20_000, 20_000]
 
 
 ## override /model:
