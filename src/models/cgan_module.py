@@ -216,8 +216,8 @@ class CondParticleGANModule(LightningModule):
         self.log("val/min_avg_wd", self.val_min_avg_wd.compute(), prog_bar=True)
         self.log("val/min_avg_nll", self.val_min_avg_nll.compute(), prog_bar=True)
         
-        if avg_nll < self.val_min_avg_nll.compute() or \
-            wd_distance < self.val_min_avg_wd.compute():
+        if avg_nll <= self.val_min_avg_nll.compute() or \
+            wd_distance <= self.val_min_avg_wd.compute():
             outname = f"val-{self.current_epoch}-{batch_idx}"
             predictions = perf['preds']
             truths = perf['truths']
@@ -227,6 +227,7 @@ class CondParticleGANModule(LightningModule):
         
     def validaton_epoch_end(self, outputs: List[Any]):
         ## `outputs` is a list of dicts returned from `validation_step()`
+        ## Need it in multiple GPUs training.
         pass
         
     def test_step(self, batch: Any, batch_idx: int):
@@ -246,8 +247,8 @@ class CondParticleGANModule(LightningModule):
         self.log("test/wd_best", self.test_wd_best.compute(), prog_bar=True)
         self.log("test/nll_best", self.test_nll_best.compute(), prog_bar=True)
         ## comparison
-        if avg_nll < self.test_nll_best.compute() or \
-            wd_distance < self.test_wd_best.compute():
+        if avg_nll <= self.test_nll_best.compute() or \
+            wd_distance <= self.test_wd_best.compute():
                 outname = f"test-{self.current_epoch}-{batch_idx}"
                 predictions = perf['preds']
                 truths = perf['truths']
