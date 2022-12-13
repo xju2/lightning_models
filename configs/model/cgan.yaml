@@ -20,9 +20,9 @@ optimizer_discriminator:
 generator:
   _target_: src.models.components.mlp.MLPModule
   # _target_: src.models.components.mlp_res.ResMLPModule
-  input_dim: 136
+  input_dim: 136   # ${model.noise_dim} + ${model.cond_info_dim} = 128 + 8
   hidden_dims: [256, 256]
-  output_dim: 646
+  output_dim: 646   # ${model.num_particle_ids} * ${model.num_output_particles} + ${model.num_particle_kinematics}
   layer_norm: true
   dropout: 0.0
 

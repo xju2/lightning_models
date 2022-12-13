@@ -29,13 +29,15 @@ trainer:
 datamodule:
   batch_size: 10_000
   core_dataset:
-    train_val_test_split: [50_000_000, 20_000, 20_000]
+    train_val_test_split: [5_000_000, 20_000, 20_000]
 
 
 ## override /model:
 model:
+  noise_dim: 64
   generator:
-    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
+    input_dim: 72
+    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
 
   discriminator:
     encoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]

@@ -75,7 +75,7 @@ class CondParticleGANModule(LightningModule):
         opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters()) # type: ignore
         opt_disc = self.hparams.optimizer_discriminator(params=self.discriminator.parameters()) # type: ignore
         
-        return [opt_gen, opt_disc], []
+        return [opt_disc, opt_gen], []
     
     def generate_noise(self, num_evts: int):
         return torch.randn(num_evts, self.hparams.noise_dim)    # type: ignore
@@ -97,25 +97,9 @@ class CondParticleGANModule(LightningModule):
         device = x_momenta.device
         
         noise = self.generate_noise(num_evts).to(device)
-        ## Train generator
-        if optimizer_idx == 0:
-            particle_kinematics, particle_types = self(noise, cond_info)
-            particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
-            x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
-            
-            score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze()
-            
-            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-            loss_gen = self.criterion(score_fakes, label)
-            
-            ## update and log metrics
-            self.train_loss_gen(loss_gen)
-            self.log("lossG", loss_gen, prog_bar=True)
-            
-            return {"loss": loss_gen}
         
         ##  Train discriminator   
-        if optimizer_idx == 1:
+        if optimizer_idx == 0:
             ## with real batch
             x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
             score_truth = self.discriminator(x_truth, x_type_indices).squeeze()
@@ -140,6 +124,24 @@ class CondParticleGANModule(LightningModule):
             self.train_loss_disc(loss_disc)
             self.log("lossD", loss_disc, prog_bar=True)
             return {"loss": loss_disc}
+        
+        ## Train generator
+        if optimizer_idx == 1:
+            particle_kinematics, particle_types = self(noise, cond_info)
+            particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
+            x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
+            
+            score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze()
+            
+            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
+            loss_gen = self.criterion(score_fakes, label)
+            
+            ## update and log metrics
+            self.train_loss_gen(loss_gen)
+            self.log("lossG", loss_gen, prog_bar=True)
+            
+            return {"loss": loss_gen}
+
 
     def training_epoch_end(self, outputs: List[Any]):
         # `outputs` is a list of dicts returned from `training_step()`
