@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from scipy import stats
 from torchmetrics import MinMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
 
 
 class CondParticleGANModule(LightningModule):
@@ -32,7 +31,7 @@ class CondParticleGANModule(LightningModule):
         discriminator: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
         optimizer_discriminator: torch.optim.Optimizer,
-        comparison_fn: Optional[Any] = None,
+        comparison_fn: Optional[Callable] = None,
     ):
         super().__init__()
         

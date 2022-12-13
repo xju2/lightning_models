@@ -26,7 +26,6 @@ generator:
   layer_norm: true
   dropout: 0.0
 
-
 discriminator:
   _target_: src.models.components.mlp.MLPWithEmbeddingModule
   input_dim: 10 # ${model.cond_info_dim} + ${model.num_particle_kinematics}
