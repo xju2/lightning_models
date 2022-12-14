@@ -97,12 +97,19 @@ class MLPWithEmbeddingModule(nn.Module):
         decoder_dims: List[int],
         output_dim: int,
         last_activation: Optional[torch.nn.Module] = None,
+        dropout: float = 0.0,
     ):
         super().__init__()
 
         self.normal_mlp = MLPModule(input_dim, encoder_dims, encoder_dims[-1])
-        self.type_mlp = MLPTypeEmbeddingModule(vocab_size, word_embedding_dim, encoder_dims, encoder_dims[-1])
-        self.decoder = MLPModule(encoder_dims[-1]*(1+num_words), decoder_dims, output_dim, last_activation=last_activation)
+        
+        self.type_mlp = MLPTypeEmbeddingModule(
+            vocab_size, word_embedding_dim, 
+            encoder_dims, encoder_dims[-1], dropout=dropout)
+        
+        self.decoder = MLPModule(
+            encoder_dims[-1]*(1+num_words),
+            decoder_dims, output_dim, last_activation=last_activation)
         
     def forward(self, x, type_ids) -> torch.Tensor:
         normal_embeds = self.normal_mlp(x)

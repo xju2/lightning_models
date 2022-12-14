@@ -29,6 +29,7 @@ class CondParticleGANModule(LightningModule):
         num_particle_kinematics: int,
         generator: torch.nn.Module,
         discriminator: torch.nn.Module,
+        criterion: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
         optimizer_discriminator: torch.optim.Optimizer,
         comparison_fn: Optional[Callable] = None,
@@ -36,14 +37,14 @@ class CondParticleGANModule(LightningModule):
         super().__init__()
         
         self.save_hyperparameters(
-            logger=False, ignore=["generator", "discriminator", "comparison_fn"])
+            logger=False, ignore=["generator", "discriminator", "comparison_fn", "criterion"])
         
         self.generator = generator
         self.discriminator = discriminator
         self.comparison_fn = comparison_fn
         
         ## loss function
-        self.criterion = torch.nn.BCELoss()
+        self.criterion = criterion
         
         ## metric objects for calculating and averaging accuracy across batches
         self.train_loss_gen = MeanMetric()

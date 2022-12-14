@@ -22,30 +22,52 @@ tags: ["herwig", "allhadrons"]
 seed: 12345
 
 trainer:
-  max_epochs: 100
-  val_check_interval: 20
+  max_epochs: 50
+  val_check_interval: 50
+  gradient_clip_val: 0.01
+  gradient_clip_algorithm: "value"
+
+callbacks:
+  model_checkpoint:
+    monitor: "val/min_avg_wd"
+    mode: "min"
+    save_top_k: 5
   
 ## override /datamodule:
 datamodule:
-  batch_size: 10_000
+  batch_size: 5_000
+  pin_memory: True
   core_dataset:
-    train_val_test_split: [5_000_000, 20_000, 20_000]
+    train_val_test_split: [5_000_000, 40_000, 40_000]
 
 
 ## override /model:
 model:
   noise_dim: 64
   generator:
-    input_dim: 72
+    input_dim: 72   # ${model.noise_dim} + ${model.cond_info_dim}
     hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
 
   discriminator:
     encoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
     decoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
     word_embedding_dim: 8
+    dropout: 0.2
 
   optimizer_generator:
-    lr: 0.000005
+    _target_: torch.optim.RMSprop
+    lr: 0.000001
 
   optimizer_discriminator:
-    lr: 0.001
+    _target_: torch.optim.RMSprop
+    lr: 0.000005
+  
+  # criterion:
+  #   __target__: torch.nn.BCELoss
+  #   reduction: "mean"
+
+  # optimizer_generator:
+  #   lr: 0.000001
+
+  # optimizer_discriminator:
+  #   lr: 0.000005
