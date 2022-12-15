@@ -24,8 +24,6 @@ seed: 12345
 trainer:
   max_epochs: 50
   val_check_interval: 50
-  gradient_clip_val: 0.01
-  gradient_clip_algorithm: "value"
 
 callbacks:
   model_checkpoint:

@@ -66,23 +66,24 @@ class CompareParticles(HyperparametersMixin):
         
         ## figure out predicted particle type
         num_particles = self.hparams.num_particles
-        axs = create_plots(1, num_particles)
-        ranges = (-0.5, self.hparams.num_particle_ids+0.5)
-        bins = self.hparams.num_particle_ids + 1
+        if num_particles > 0:
+            axs = create_plots(1, num_particles)
+            ranges = (-0.5, self.hparams.num_particle_ids+0.5)
+            bins = self.hparams.num_particle_ids + 1
 
-        for idx in range(num_particles):
-            sim_particle_types  = predictions[:, self.hparams.num_kinematics+idx]
-            true_particle_types = truths[:, self.hparams.num_kinematics+idx]
-            
-            ax = axs[idx]
-            yvals, _, _ = ax.hist(true_particle_types, bins=bins, range=ranges, label='Truth', **config)
-            max_y = np.max(yvals) * 1.1
-            ax.hist(sim_particle_types, bins=bins, range=ranges, label='Generator', **config)
-            ax.set_xlabel(r"{}".format(f"{idx}th particle type"))
-            ax.set_ylim(0, max_y)
-            ax.legend()
+            for idx in range(num_particles):
+                sim_particle_types  = predictions[:, self.hparams.num_kinematics+idx]
+                true_particle_types = truths[:, self.hparams.num_kinematics+idx]
+                
+                ax = axs[idx]
+                yvals, _, _ = ax.hist(true_particle_types, bins=bins, range=ranges, label='Truth', **config)
+                max_y = np.max(yvals) * 1.1
+                ax.hist(sim_particle_types, bins=bins, range=ranges, label='Generator', **config)
+                ax.set_xlabel(r"{}".format(f"{idx}th particle type"))
+                ax.set_ylim(0, max_y)
+                ax.legend()
 
-        if outname is not None:
-            plt.savefig(outname+"-types.png")
-            plt.savefig(outname+"-types.pdf")
-        plt.close('all')
+            if outname is not None:
+                plt.savefig(outname+"-types.png")
+                plt.savefig(outname+"-types.pdf")
+            plt.close('all')
