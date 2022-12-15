@@ -467,10 +467,10 @@ class HerwigEventDataset(InMemoryDataset):
         h2_type_indices = torch.from_numpy(np.vectorize(self.pids_to_ix.get)(h2_types))
 
         data = Data(
-            x=torch.from_numpy(out_truth),
+            x=torch.from_numpy(out_truth).float(),
             edge_index=None,
-            cond_info=torch.from_numpy(cond_info),
-            ptypes=torch.from_numpy(np.concatenate([h1_type_indices, h2_type_indices], axis=1)),
+            cond_info=torch.from_numpy(cond_info).float(),
+            ptypes=torch.from_numpy(np.concatenate([h1_type_indices, h2_type_indices], axis=1)).long(),
         )
         return data
     

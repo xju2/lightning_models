@@ -22,7 +22,7 @@ tags: ["herwig", "allhadrons"]
 seed: 12345
 
 trainer:
-  max_epochs: 50
+  max_epochs: 100
   val_check_interval: 50
 
 callbacks:
@@ -48,17 +48,17 @@ model:
 
   discriminator:
     encoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
-    decoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
-    word_embedding_dim: 8
-    dropout: 0.2
+    decoder_dims: [128, 128, 128, 128, 256, 256, 256, 256]
+    word_embedding_dim: 16
+    dropout: 0.3
 
   optimizer_generator:
     _target_: torch.optim.RMSprop
-    lr: 0.000001
+    lr: 0.000005
 
   optimizer_discriminator:
     _target_: torch.optim.RMSprop
-    lr: 0.000005
+    lr: 0.0001
   
   # criterion:
   #   __target__: torch.nn.BCELoss
