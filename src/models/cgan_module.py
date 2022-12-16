@@ -32,15 +32,17 @@ class CondParticleGANModule(LightningModule):
         criterion: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
         optimizer_discriminator: torch.optim.Optimizer,
+        num_critics: int,
+        num_gen: int,
+        scheduler_generator: torch.optim.lr_scheduler,
+        scheduler_discriminator: torch.optim.lr_scheduler,
         comparison_fn: Optional[Callable] = None,
+        
     ):
         super().__init__()
         
         self.save_hyperparameters(
             logger=False, ignore=["generator", "discriminator", "comparison_fn", "criterion"])
-        
-        # Important: This property activates manual optimization.
-        self.automatic_optimization = False
         
         self.generator = generator
         self.discriminator = discriminator
@@ -78,7 +80,46 @@ class CondParticleGANModule(LightningModule):
         opt_gen = self.hparams.optimizer_generator(params=self.generator.parameters()) # type: ignore
         opt_disc = self.hparams.optimizer_discriminator(params=self.discriminator.parameters()) # type: ignore
         
-        return opt_disc, opt_gen
+        ## define schedulers
+        if self.hparams.scheduler_generator is not None:
+            sched_gen = self.hparams.scheduler_generator(optimizer=opt_gen)
+            sched_disc = self.hparams.scheduler_discriminator(optimizer=opt_disc)
+            
+            return (
+                {
+                    "optimizer": opt_disc,
+                    "lr_scheduler": {
+                        "scheduler": sched_disc,
+                        "monitor": "val/min_avg_wd",
+                        "interval": "step",
+                        "frequency": self.trainer.val_check_interval,
+                        "strict": True,
+                        "name": "DiscriminatorLRScheduler"
+                    }, 
+                    "frequency": self.hparams.num_critics
+                },
+                {
+                    "optimizer": opt_gen,
+                    "lr_scheduler": {
+                        "scheduler": sched_gen,
+                        "monitor": "val/min_avg_wd",
+                        "interval": "step",
+                        "frequency": self.trainer.val_check_interval,
+                        "strict": True,
+                        "name": "GeneratorLRScheduler"                        
+                    },
+                    "frequency": self.hparams.num_gen
+                })
+            
+        
+        return (
+            {
+                "optimizer": opt_disc,
+                "frequency": self.hparams.num_critics
+            }, {
+                "optimizer": opt_gen,
+                "frequency": self.hparams.num_gen
+            })
     
     def generate_noise(self, num_evts: int):
         return torch.randn(num_evts, self.hparams.noise_dim)    # type: ignore
@@ -91,11 +132,9 @@ class CondParticleGANModule(LightningModule):
         self.test_wd_best.reset()
         self.test_nll_best.reset()
         
-    def training_step(self, batch: Any, batch_idx: int):
+    def training_step(self, batch: Any, batch_idx: int, optimizer_idx: int):
         real_label = 1
         fake_label = 0
-        
-        opt_disc, opt_gen = self.optimizers()
         
         cond_info, x_momenta, x_type_indices = batch
         num_evts = x_momenta.shape[0]
@@ -103,60 +142,50 @@ class CondParticleGANModule(LightningModule):
         
         noise = self.generate_noise(num_evts).to(device)
         
+        ## generate fake batch
+        particle_kinematics, particle_types = self(noise, cond_info)
+        particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
+        x_generated = particle_kinematics if cond_info is None \
+            else torch.cat([cond_info, particle_kinematics], dim=1)
+
         #######################
         ##  Train discriminator
         #######################
-        ## with real batch
-        opt_disc.zero_grad()
-        
-        x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
-        score_truth = self.discriminator(x_truth, x_type_indices).squeeze(-1)
-        
-        label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-        loss_real = self.criterion(score_truth, label)
-        
-        # loss_real.backward()
-        # self.manual_backward(loss_real)
+        if optimizer_idx == 0:
+            ## with real batch
+            
+            x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
+            score_truth = self.discriminator(x_truth, x_type_indices).squeeze(-1)
+            
+            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
+            loss_real = self.criterion(score_truth, label)
 
-        ## with fake batch
-        particle_kinematics, particle_types = self(noise, cond_info)
-        particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
-        x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
-        # x_generated = x_generated.detach()
-        # particle_kinematics = particle_kinematics.detach()
-        
-        score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(-1)
-        fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
-        loss_fake = self.criterion(score_fakes, fake_labels)
-        
-        # loss_fake.backward()
-        
-        loss_disc = (loss_real + loss_fake) / 2
-        self.manual_backward(loss_disc)
-        opt_disc.step()
-        
-        ## update and log metrics
-        self.train_loss_disc(loss_disc)
-        self.log("lossD", loss_disc, prog_bar=True)
+            ## with fake batch            
+            score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(-1)
+            fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
+            loss_fake = self.criterion(score_fakes, fake_labels)
+            
+            loss_disc = (loss_real + loss_fake) / 2
+            
+            ## update and log metrics
+            self.train_loss_disc(loss_disc)
+            self.log("lossD", loss_disc, prog_bar=True)
+            return {"loss": loss_disc}
 
         #######################
         ## Train generator ####
         #######################
-        # particle_kinematics, particle_types = self(noise, cond_info)
-        # particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
-        # x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
-        opt_gen.zero_grad()
-        score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(-1)
-        
-        label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-        loss_gen = self.criterion(score_fakes, label)
-        # loss_gen.backward()
-        self.manual_backward(loss_gen)
-        opt_gen.step()
-        
-        ## update and log metrics
-        self.train_loss_gen(loss_gen)
-        self.log("lossG", loss_gen, prog_bar=True)
+        if optimizer_idx == 1:
+            score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(-1)
+            
+            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
+            loss_gen = self.criterion(score_fakes, label)
+            
+            ## update and log metrics
+            self.train_loss_gen(loss_gen)
+            self.log("lossG", loss_gen, prog_bar=True)
+            return {"loss": loss_gen}
+
 
     def training_epoch_end(self, outputs: List[Any]):
         # `outputs` is a list of dicts returned from `training_step()`
@@ -411,6 +440,7 @@ class EventGANModule(LightningModule):
         ## update and log metrics
         self.train_loss_disc(loss_disc)
         self.log("lossD", loss_disc, prog_bar=True)
+
 
         #######################
         ## Train generator ####

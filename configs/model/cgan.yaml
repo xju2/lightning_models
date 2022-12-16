@@ -5,6 +5,10 @@ num_particle_ids: 322
 num_output_particles: 2
 num_particle_kinematics: 2
 
+## how often the optimizers will be used.
+num_critics: 1
+num_gen: 5
+
 optimizer_generator:
   _target_: torch.optim.Adam
   _partial_: true
@@ -14,6 +18,16 @@ optimizer_discriminator:
   _target_: torch.optim.Adam
   _partial_: true
   lr: 0.0001
+
+scheduler_generator:
+  _target_: torch.optim.lr_scheduler.ExponentialLR
+  _partial_: true
+  gamma: 0.99
+
+scheduler_discriminator:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+  _partial_: true
+  T_0: 100
 
 generator:
   _target_: src.models.components.mlp.MLPModule
