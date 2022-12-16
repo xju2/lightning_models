@@ -110,7 +110,7 @@ class CondParticleGANModule(LightningModule):
         opt_disc.zero_grad()
         
         x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
-        score_truth = self.discriminator(x_truth, x_type_indices).squeeze(0)
+        score_truth = self.discriminator(x_truth, x_type_indices).squeeze(-1)
         
         label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         loss_real = self.criterion(score_truth, label)
@@ -125,7 +125,7 @@ class CondParticleGANModule(LightningModule):
         # x_generated = x_generated.detach()
         # particle_kinematics = particle_kinematics.detach()
         
-        score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(0)
+        score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(-1)
         fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
         loss_fake = self.criterion(score_fakes, fake_labels)
         
@@ -146,7 +146,7 @@ class CondParticleGANModule(LightningModule):
         # particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
         # x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
         opt_gen.zero_grad()
-        score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(0)
+        score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(-1)
         
         label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         loss_gen = self.criterion(score_fakes, label)
@@ -391,7 +391,7 @@ class EventGANModule(LightningModule):
         opt_disc.zero_grad()
         
         x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
-        score_truth = self.discriminator(x_truth, batch.batch).squeeze(0)
+        score_truth = self.discriminator(x_truth, batch.batch).squeeze(-1)
         
         label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         loss_real = self.criterion(score_truth, label)
@@ -400,7 +400,7 @@ class EventGANModule(LightningModule):
         particle_kinematics = self(noise, cond_info)
         x_generated = particle_kinematics if cond_info is None else torch.cat([cond_info, particle_kinematics], dim=1)
         
-        score_fakes = self.discriminator(x_generated.detach(), batch.batch).squeeze(0)
+        score_fakes = self.discriminator(x_generated.detach(), batch.batch).squeeze(-1)
         fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
         loss_fake = self.criterion(score_fakes, fake_labels)
         
@@ -416,7 +416,7 @@ class EventGANModule(LightningModule):
         ## Train generator ####
         #######################
         opt_gen.zero_grad()
-        score_fakes = self.discriminator(x_generated, batch.batch).squeeze(0)
+        score_fakes = self.discriminator(x_generated, batch.batch).squeeze(-1)
         
         label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
         loss_gen = self.criterion(score_fakes, label)
