@@ -38,7 +38,7 @@ class CompareParticles(HyperparametersMixin):
         xbins = self.hparams.xbins
         xlabels = self.hparams.xlabels
         
-        outname = "test" if tags is None else tags
+        outname = "dummy" if tags is None else tags
         if self.hparams.outdir is not None:
             os.makedirs(self.hparams.outdir, exist_ok=True)
             outname = os.path.join(self.hparams.outdir, outname)
