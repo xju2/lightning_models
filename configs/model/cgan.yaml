@@ -12,22 +12,23 @@ num_gen: 5
 optimizer_generator:
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 0.00001
+  lr: 0.000001
 
 optimizer_discriminator:
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 0.0001
+  lr: 0.00001
 
 scheduler_generator:
   _target_: torch.optim.lr_scheduler.ExponentialLR
   _partial_: true
-  gamma: 0.99
+  gamma: 0.999
 
 scheduler_discriminator:
   _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
   _partial_: true
-  T_0: 100
+  T_0: 1
+  T_mult: 2
 
 generator:
   _target_: src.models.components.mlp.MLPModule
@@ -37,6 +38,8 @@ generator:
   output_dim: 646   # ${model.num_particle_ids} * ${model.num_output_particles} + ${model.num_particle_kinematics}
   layer_norm: true
   dropout: 0.0
+  last_activation:
+    _target_: torch.nn.Tanh
 
 discriminator:
   _target_: src.models.components.mlp.MLPWithEmbeddingModule
