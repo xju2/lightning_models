@@ -1,5 +1,5 @@
 """Multilayer Perceptron (MLP) module."""
-from typing import List, Optional
+from typing import List, Optional, Tuple
 try:
     from itertools import pairwise
 except ImportError:
@@ -61,6 +61,43 @@ class MLPModule(nn.Module):
         return self.model(x)
 
 
+class MLPParticleModule(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        kinematic_dim: int,
+        particle_type_dim: int,
+        num_output_particles: int,
+        layer_norm: bool = True,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        
+        # build the linear model
+        self.encoder = nn.Sequential(*build_linear_layers(
+            input_dim, hidden_dims, hidden_dims[-1], layer_norm, dropout)
+        )
+        self.particle_type = nn.Sequential(*build_linear_layers(
+            hidden_dims[-1], [particle_type_dim*2], particle_type_dim, layer_norm, dropout, torch.nn.Softmax(dim=-1)))
+                                           
+        self.particle_kinematics = nn.Sequential(*build_linear_layers(
+            hidden_dims[-1], [kinematic_dim*2], kinematic_dim, layer_norm, dropout, torch.nn.Tanh()))
+        
+        self.num_output_particles = num_output_particles                                            
+                                           
+        
+    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
+        batch_size = x.shape[0]
+        
+        encode = self.encoder(x)
+        p_kines = self.particle_kinematics(encode)
+        
+        type_encode = encode.reshape(batch_size * self.num_output_particles, -1)
+        p_types = self.particle_type(type_encode)
+        
+        return p_kines, p_types
+    
 class MLPTypeEmbeddingModule(nn.Module):
     def __init__(
         self,
