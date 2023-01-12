@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from scipy import stats
 from torchmetrics import MinMetric, MeanMetric
+from torch.optim import Optimizer
 
 
 class CondParticleGANModule(LightningModule):
@@ -16,6 +17,7 @@ class CondParticleGANModule(LightningModule):
         num_particle_kinematics: number of outgoing particles' kinematic variables
         generator: generator network
         discriminator: discriminator network
+        loss_type: type of loss function to use, ['bce', 'wasserstein']
         optimizer_generator: generator optimizer
         optimizer_discriminator: discriminator optimizer
         comparison_fn: function to compare generated and real data
@@ -29,15 +31,14 @@ class CondParticleGANModule(LightningModule):
         num_particle_kinematics: int,
         generator: torch.nn.Module,
         discriminator: torch.nn.Module,
-        criterion: torch.nn.Module,
         optimizer_generator: torch.optim.Optimizer,
         optimizer_discriminator: torch.optim.Optimizer,
         num_critics: int,
         num_gen: int,
-        scheduler_generator: torch.optim.lr_scheduler,
-        scheduler_discriminator: torch.optim.lr_scheduler,
+        scheduler_generator: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+        scheduler_discriminator: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+        loss_type: str = "bce",
         comparison_fn: Optional[Callable] = None,
-        
     ):
         super().__init__()
         
@@ -49,7 +50,7 @@ class CondParticleGANModule(LightningModule):
         self.comparison_fn = comparison_fn
         
         ## loss function
-        self.criterion = criterion
+        self.criterion = torch.nn.BCELoss()
         
         ## metric objects for calculating and averaging accuracy across batches
         self.train_loss_gen = MeanMetric()
@@ -66,14 +67,31 @@ class CondParticleGANModule(LightningModule):
         self.test_wd_best = MinMetric()
         self.test_nll_best = MinMetric()
         
+        self.use_particle_mlp = False
+        
+        ## check if generator is a particle MLP,
+        ## which produces particle kinematics and types in one go.
+        ## In MLP case, we need to split the output into two parts.
+        for name, module in self.generator.named_modules():
+            if "MLPParticleModule" in name:
+                self.use_particle_mlp = True
+                break
+        
     def forward(self, noise: torch.Tensor, cond_info: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         x_fake = noise if cond_info is None else torch.concat([cond_info, noise], dim=1)
+        return self._call_mlp_particle_generator(x_fake) if self.use_particle_mlp else \
+            self._call_mlp_generator(x_fake) 
+    
+    def _call_mlp_particle_generator(self, x_fake: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.generator(x_fake)
+    
+    def _call_mlp_generator(self, x_fake: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         fakes = self.generator(x_fake)
-        num_evts = noise.shape[0]
+        num_evts = x_fake.shape[0]
+
         particle_kinematics = fakes[:, :self.hparams.num_particle_kinematics]       # type: ignore
         particle_types = fakes[:, self.hparams.num_particle_kinematics:].reshape(   # type: ignore
             num_evts* self.hparams.num_output_particles, -1)                        # type: ignore
-        # particle_type_idx = torch.argmax(particle_types, dim=1).reshape(num_evts, -1)
         return particle_kinematics, particle_types
     
     def configure_optimizers(self):
@@ -157,13 +175,23 @@ class CondParticleGANModule(LightningModule):
             x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
             score_truth = self.discriminator(x_truth, x_type_indices).squeeze(-1)
             
-            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-            loss_real = self.criterion(score_truth, label)
+            if self.hparams.loss_type == "wasserstein":
+                loss_real = - score_truth.mean(0).view(1)
+            elif self.hparams.loss_type == "bce":
+                label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
+                loss_real = self.criterion(score_truth, label)
+            else:
+                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
 
             ## with fake batch            
             score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(-1)
-            fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
-            loss_fake = self.criterion(score_fakes, fake_labels)
+            if self.hparams.loss_type == "wasserstein":
+                loss_fake = score_fakes.mean(0).view(1)
+            elif self.hparams.loss_type == "bce":
+                fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
+                loss_fake = self.criterion(score_fakes, fake_labels)
+            else:
+                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
             
             loss_disc = (loss_real + loss_fake) / 2
             
@@ -178,8 +206,13 @@ class CondParticleGANModule(LightningModule):
         if optimizer_idx == 1:
             score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(-1)
             
-            label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-            loss_gen = self.criterion(score_fakes, label)
+            if self.hparams.loss_type == "wasserstein":
+                loss_gen = - score_fakes.mean(0).view(1)
+            elif self.hparams.loss_type == "bce":
+                label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
+                loss_gen = self.criterion(score_fakes, label)
+            else:
+                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
             
             ## update and log metrics
             self.train_loss_gen(loss_gen)
@@ -212,7 +245,7 @@ class CondParticleGANModule(LightningModule):
                 pidx_end   = pidx_start + self.hparams.num_particle_ids
                 gen_types = particle_types[:, pidx_start:pidx_end]
                 # print(gen_types.shape, x_type_indices[:, pidx].shape, pidx_start, pidx_end, particle_types.shape)
-                log_probability = F.log_softmax(gen_types, dim=1)
+                log_probability = gen_types if self.use_particle_mlp else F.log_softmax(gen_types, dim=1)
                 nll = float(F.nll_loss(log_probability,
                                     x_type_indices[:, pidx]))
                 avg_nll += nll
@@ -264,7 +297,7 @@ class CondParticleGANModule(LightningModule):
         
         if avg_nll <= self.val_min_avg_nll.compute() or \
             wd_distance <= self.val_min_avg_wd.compute():
-            outname = f"val-{self.current_epoch}-{batch_idx}"
+            outname = f"val-{self.current_epoch:02d}-{batch_idx:02d}"
             predictions = perf['preds']
             truths = perf['truths']
             self.compare(predictions, truths, outname)
@@ -295,7 +328,7 @@ class CondParticleGANModule(LightningModule):
         ## comparison
         if avg_nll <= self.test_nll_best.compute() or \
             wd_distance <= self.test_wd_best.compute():
-                outname = f"test-{self.current_epoch}-{batch_idx}"
+                outname = f"test-{self.current_epoch:02d}-{batch_idx:02d}"
                 predictions = perf['preds']
                 truths = perf['truths']
                 self.compare(predictions, truths, outname)
