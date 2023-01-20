@@ -98,6 +98,28 @@ class MLPParticleModule(nn.Module):
         
         return p_kines, p_types
     
+class MLPOneHotEmbeddingModule(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        hidden_dims: List[int],
+        output_dim: int,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.num_classes = vocab_size
+            
+        # build the linear model
+        self.model = nn.Sequential(*build_linear_layers(
+            vocab_size, hidden_dims, output_dim, True, dropout)
+        )
+        
+    def forward(self, x) -> torch.Tensor:
+        batch_size = x.shape[0]
+        x = x.view(-1)
+        embeds = F.one_hot(x, self.num_classes).view(batch_size, -1)
+        return  self.model(embeds)
+
 class MLPTypeEmbeddingModule(nn.Module):
     def __init__(
         self,
@@ -122,27 +144,34 @@ class MLPTypeEmbeddingModule(nn.Module):
         embeds = self.embeddings(x).view(batch_size, -1)
         return  self.model(embeds)
 
-
 class MLPWithEmbeddingModule(nn.Module):
     def __init__(
         self,
         input_dim: int,
         vocab_size: int,
-        word_embedding_dim: int,
+        word_embedding_dim: int, ## only used if embedding_type is dense
         num_words: int,
         encoder_dims: List[int],
         decoder_dims: List[int],
         output_dim: int,
         last_activation: Optional[torch.nn.Module] = None,
         dropout: float = 0.0,
+        embedding_type: str = "onehot", # onehot or dense
     ):
         super().__init__()
 
         self.normal_mlp = MLPModule(input_dim, encoder_dims, encoder_dims[-1])
         
-        self.type_mlp = MLPTypeEmbeddingModule(
-            vocab_size, word_embedding_dim, 
-            encoder_dims, encoder_dims[-1], dropout=dropout)
+        if embedding_type == "onehot":
+            self.type_mlp = MLPOneHotEmbeddingModule(
+                vocab_size, encoder_dims, encoder_dims[-1], dropout=dropout
+            )
+        elif embedding_type == "dense":
+            self.type_mlp = MLPTypeEmbeddingModule(
+                vocab_size, word_embedding_dim, 
+                encoder_dims, encoder_dims[-1], dropout=dropout)
+        else:
+            raise ValueError(f"embedding_type {embedding_type} not supported")
         
         self.decoder = MLPModule(
             encoder_dims[-1]*(1+num_words),
