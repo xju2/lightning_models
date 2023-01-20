@@ -17,7 +17,7 @@ class CondParticleGANModule(LightningModule):
         num_particle_kinematics: number of outgoing particles' kinematic variables
         generator: generator network
         discriminator: discriminator network
-        loss_type: type of loss function to use, ['bce', 'wasserstein']
+        loss_type: type of loss function to use, ['bce', 'wasserstein', 'ls']
         optimizer_generator: generator optimizer
         optimizer_discriminator: discriminator optimizer
         comparison_fn: function to compare generated and real data
@@ -150,6 +150,38 @@ class CondParticleGANModule(LightningModule):
         self.test_wd_best.reset()
         self.test_nll_best.reset()
         
+    def _generator_loss(self, score: torch.Tensor) -> torch.Tensor:
+        loss_type = self.hparams.loss_type
+        if loss_type == "wasserstein":
+            ## WGAN: https://arxiv.org/abs/1701.07875
+            loss_gen = - score.mean(0).view(1)
+        elif loss_type == "bce":
+            ## GAN: https://arxiv.org/abs/1406.2661
+            loss_gen = F.binary_cross_entropy(score, torch.ones_like(score))
+        elif loss_type == "ls":
+            ## least squares GAN: https://arxiv.org/abs/1611.04076
+            loss_gen = 0.5 * ((score - 1) ** 2).mean(0).view(1)
+        else:
+            raise ValueError(f"Unknown loss type: {loss_type}")
+        return loss_gen
+
+
+    def _discriminator_loss(self, score_real: torch.Tensor,
+                            score_fake: torch.Tensor) -> torch.Tensor:
+        loss_type = self.hparams.loss_type
+        if loss_type == "wasserstein":
+            loss_disc = score_fake.mean(0).view(1) - score_real.mean(0).view(1)
+        elif loss_type == "bce":
+            loss_disc = F.binary_cross_entropy(score_real, torch.ones_like(score_real)) + \
+                F.binary_cross_entropy(score_fake, torch.zeros_like(score_fake))
+        elif loss_type == "ls":
+            loss_disc = 0.5 * ((score_real - 1) ** 2).mean(0).view(1) + \
+                0.5 * (score_fake ** 2).mean(0).view(1)
+        else:
+            raise ValueError(f"Unknown loss type: {loss_type}")
+        return loss_disc
+
+
     def training_step(self, batch: Any, batch_idx: int, optimizer_idx: int):
         real_label = 1
         fake_label = 0
@@ -171,30 +203,13 @@ class CondParticleGANModule(LightningModule):
         #######################
         if optimizer_idx == 0:
             ## with real batch
-            
             x_truth = x_momenta if cond_info is None else torch.cat([cond_info, x_momenta], dim=1)
             score_truth = self.discriminator(x_truth, x_type_indices).squeeze(-1)
-            
-            if self.hparams.loss_type == "wasserstein":
-                loss_real = - score_truth.mean(0).view(1)
-            elif self.hparams.loss_type == "bce":
-                label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-                loss_real = self.criterion(score_truth, label)
-            else:
-                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
 
             ## with fake batch            
             score_fakes = self.discriminator(x_generated.detach(), particle_type_idx.detach()).squeeze(-1)
-            if self.hparams.loss_type == "wasserstein":
-                loss_fake = score_fakes.mean(0).view(1)
-            elif self.hparams.loss_type == "bce":
-                fake_labels = torch.full((num_evts,), fake_label, dtype=torch.float).to(device)
-                loss_fake = self.criterion(score_fakes, fake_labels)
-            else:
-                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
             
-            loss_disc = (loss_real + loss_fake) / 2
-            
+            loss_disc = self._discriminator_loss(score_truth, score_fakes)
             ## update and log metrics
             self.train_loss_disc(loss_disc)
             self.log("lossD", loss_disc, prog_bar=True)
@@ -205,14 +220,7 @@ class CondParticleGANModule(LightningModule):
         #######################
         if optimizer_idx == 1:
             score_fakes = self.discriminator(x_generated, particle_type_idx).squeeze(-1)
-            
-            if self.hparams.loss_type == "wasserstein":
-                loss_gen = - score_fakes.mean(0).view(1)
-            elif self.hparams.loss_type == "bce":
-                label = torch.full((num_evts,), real_label, dtype=torch.float).to(device)
-                loss_gen = self.criterion(score_fakes, label)
-            else:
-                raise ValueError(f"Unknown loss type: {self.hparams.loss_type}")
+            loss_gen = self._generator_loss(score_fakes)
             
             ## update and log metrics
             self.train_loss_gen(loss_gen)
