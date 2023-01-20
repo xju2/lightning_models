@@ -157,7 +157,7 @@ class CondParticleGANModule(LightningModule):
             loss_gen = - score.mean(0).view(1)
         elif loss_type == "bce":
             ## GAN: https://arxiv.org/abs/1406.2661
-            loss_gen = F.binary_cross_entropy(score, torch.ones_like(score))
+            loss_gen = F.binary_cross_entropy_with_logits(score, torch.ones_like(score))
         elif loss_type == "ls":
             ## least squares GAN: https://arxiv.org/abs/1611.04076
             loss_gen = 0.5 * ((score - 1) ** 2).mean(0).view(1)
@@ -172,8 +172,8 @@ class CondParticleGANModule(LightningModule):
         if loss_type == "wasserstein":
             loss_disc = score_fake.mean(0).view(1) - score_real.mean(0).view(1)
         elif loss_type == "bce":
-            loss_disc = F.binary_cross_entropy(score_real, torch.ones_like(score_real)) + \
-                F.binary_cross_entropy(score_fake, torch.zeros_like(score_fake))
+            loss_disc = F.binary_cross_entropy_with_logits(score_real, torch.ones_like(score_real)) + \
+                F.binary_cross_entropy_with_logits(score_fake, torch.zeros_like(score_fake))
         elif loss_type == "ls":
             loss_disc = 0.5 * ((score_real - 1) ** 2).mean(0).view(1) + \
                 0.5 * (score_fake ** 2).mean(0).view(1)
