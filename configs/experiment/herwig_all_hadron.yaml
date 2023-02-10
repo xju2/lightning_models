@@ -1,5 +1,8 @@
 # @package _global_
 
+# start the environment
+# conda-start torch
+
 # to execute this experiment run:
 # python src/train.py experiment=herwig_all_hadron
 ## to add a logger
@@ -22,7 +25,7 @@ tags: ["herwig", "allhadrons"]
 seed: 12345
 
 trainer:
-  max_epochs: 100
+  max_epochs: 1000
   val_check_interval: 50
 
 callbacks:
@@ -33,32 +36,32 @@ callbacks:
   
 ## override /datamodule:
 datamodule:
-  batch_size: 5_000
+  batch_size: 50_000
   pin_memory: True
   core_dataset:
-    train_val_test_split: [5_000_000, 40_000, 40_000]
+    train_val_test_split: [50_000_000, 50_000, 50_000]
 
 
 ## override /model:
 model:
   noise_dim: 64
+  # loss_type: "wasserstein" ## "wasserstein" or "bce" or "ls"
+  loss_type: "ls"
+
+  ## how often the optimizers will be used.
+  num_critics: 1
+  num_gen: 1
+
   generator:
     input_dim: 72   # ${model.noise_dim} + ${model.cond_info_dim}
-    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
+    hidden_dims: [256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256]
 
   discriminator:
     encoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
-    decoder_dims: [128, 128, 128, 128, 256, 256, 256, 256]
-    word_embedding_dim: 16
-    dropout: 0.3
-
-  optimizer_generator:
-    _target_: torch.optim.RMSprop
-    lr: 0.000005
-
-  optimizer_discriminator:
-    _target_: torch.optim.RMSprop
-    lr: 0.0001
+    decoder_dims: [128, 128, 128, 128, 128, 128, 128, 128]
+    word_embedding_dim: 10
+    dropout: 0
+  
   
   # criterion:
   #   __target__: torch.nn.BCELoss
@@ -69,3 +72,19 @@ model:
 
   # optimizer_discriminator:
   #   lr: 0.000005
+
+
+#   scheduler_generator:
+#   # _target_: torch.optim.lr_scheduler.ExponentialLR
+#   _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+#   _partial_: true
+#   T_0: 1
+#   T_mult: 2
+#   eta_min: 0.00001
+
+# scheduler_discriminator:
+#   _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+#   _partial_: true
+#   T_0: 1
+#   T_mult: 2
+#   eta_min: 0.0001

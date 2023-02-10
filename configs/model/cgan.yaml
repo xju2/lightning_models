@@ -1,4 +1,4 @@
-_target_: src.models.cgan_module.CondParticleGANModule
+_target_: src.models.cgan.cond_particle_gan.CondParticleGANModule
 noise_dim: 128
 cond_info_dim: 8
 num_particle_ids: 322
@@ -12,23 +12,12 @@ num_gen: 5
 optimizer_generator:
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 0.000001
+  lr: 0.00005
 
 optimizer_discriminator:
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 0.00001
-
-scheduler_generator:
-  _target_: torch.optim.lr_scheduler.ExponentialLR
-  _partial_: true
-  gamma: 0.999
-
-scheduler_discriminator:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
-  _partial_: true
-  T_0: 1
-  T_mult: 2
+  lr: 0.0001
 
 generator:
   _target_: src.models.components.mlp.MLPModule
@@ -50,11 +39,9 @@ discriminator:
   encoder_dims: [128, 128]
   decoder_dims: [128, 128]
   output_dim: 1
-  last_activation:
-    _target_: torch.nn.Sigmoid
-
-criterion:
-  _target_: torch.nn.BCELoss
+  embedding_type: "dense"
+  # last_activation:
+  #   _target_: torch.nn.Sigmoid
 
 comparison_fn:
   _target_: src.metrics.compare_fn.CompareParticles
