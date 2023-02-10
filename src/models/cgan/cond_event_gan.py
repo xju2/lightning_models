@@ -9,15 +9,15 @@ from torch.optim import Optimizer
 
 from src.metrics.media_logger import log_images
     
-class EventGANModule(LightningModule):
+class CondEventGANModule(LightningModule):
     """Event GAN module to generate events.
-    The conditional inputs to the gnerator are a list of cluster 4 vectors.
+    The conditional inputs feeding to the gnerator are cluster's 4 vector.
     The generator will generate kinematics of the outgoing particles.
     
     The discriminator will take the generated events and the real events as inputs,
     and output a probability of the generated events being real.
     
-    Do not consider the particle types for now.
+    Have not considered the particle types for now.
     
     Parameters:
         noise_dim: dimension of noise vector

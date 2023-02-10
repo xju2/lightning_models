@@ -1,7 +1,10 @@
 # @package _global_
 
+# start the environment
+# conda-start torch
+
 # to execute this experiment run:
-# python src/train.py experiment=herwig_all_hadron
+# python src/train.py experiment=herwig_event
 ## to add a logger
 # python src/train.py experiment=herwig_all_hadron logger=wandb
 
@@ -10,14 +13,15 @@
 
 defaults:
   - override /datamodule: herwig_event.yaml
-  - override /model: event_cgan.yaml
+  - override /model: cond_event_gan.yaml
   - override /callbacks: default.yaml
   - override /trainer: gpu.yaml
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
-
+task_name: herwigEvent
 tags: ["herwig", "Events"]
+
 wandb:
   project: "herwigEvents"
   tags: ["herwig", "Events"]
@@ -35,11 +39,10 @@ callbacks:
     save_last: True
   
 # ## override /datamodule:
-# datamodule:
-#   batch_size: 5_000
-#   pin_memory: True
-#   core_dataset:
-#     train_val_test_split: [5_000_000, 40_000, 40_000]
+datamodule:
+  batch_size: 5_000
+  pin_memory: True
+  train_val_test_split: [5_000_000, 40_000, 40_000]
 
 
 # ## override /model:

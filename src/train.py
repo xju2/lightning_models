@@ -37,7 +37,13 @@ from typing import List, Optional, Tuple
 
 import hydra
 import pytorch_lightning as pl
+
 from omegaconf import DictConfig
+from omegaconf import OmegaConf
+OmegaConf.register_new_resolver("eval", eval)
+OmegaConf.register_new_resolver("sum", lambda x,y: x + y)
+OmegaConf.register_new_resolver("gen_list", lambda x,y: [x]*y)
+
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import LightningLoggerBase
 

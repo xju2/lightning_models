@@ -29,7 +29,7 @@ defaults:
 
 
 # task name, determines output directory path
-task_name: "herwigAllhadron"
+task_name: ??? # set this in experiment config
 
 # tags to help you identify your experiments
 # you can overwrite this in experiment configs
