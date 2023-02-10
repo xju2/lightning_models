@@ -7,11 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def create_plots(nrows, ncols):
-    _, axs = plt.subplots(
+    fig, axs = plt.subplots(
         nrows, ncols,
         figsize=(4*ncols, 4*nrows), constrained_layout=True)
     axs = axs.flatten()
-    return axs
+    return fig, axs
     
 class CompareParticles(HyperparametersMixin):
     def __init__(
@@ -23,7 +23,7 @@ class CompareParticles(HyperparametersMixin):
         outdir: Optional[str] = None,
         xranges: Optional[List[Tuple[float, float]]] = None,
         xbins: Optional[List[int]] = None,
-        ) -> None:
+        ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         super().__init__()
         self.save_hyperparameters()
         
@@ -45,7 +45,7 @@ class CompareParticles(HyperparametersMixin):
         else:
             outname = None
 
-        axs = create_plots(1, self.hparams.num_kinematics)
+        fig, axs = create_plots(1, self.hparams.num_kinematics)
         config = dict(histtype='step', lw=2, density=True)
         for idx in range(self.hparams.num_kinematics):
             xrange = xranges[idx] if xranges else (-1, 1)
@@ -62,12 +62,16 @@ class CompareParticles(HyperparametersMixin):
         if outname is not None:
             plt.savefig(outname+"-angles.png")
             plt.savefig(outname+"-angles.pdf")
+        ## convert the image to a numpy array
+        fig.tight_layout(pad=0)
+        fig.canvas.draw()
+        data_angle = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         plt.close('all')
         
         ## figure out predicted particle type
         num_particles = self.hparams.num_particles
         if num_particles > 0:
-            axs = create_plots(1, num_particles)
+            fig, axs = create_plots(1, num_particles)
             ranges = (-0.5, self.hparams.num_particle_ids+0.5)
             bins = self.hparams.num_particle_ids + 1
 
@@ -86,4 +90,12 @@ class CompareParticles(HyperparametersMixin):
             if outname is not None:
                 plt.savefig(outname+"-types.png")
                 plt.savefig(outname+"-types.pdf")
+
+            ## convert the image to a numpy array
+            fig.tight_layout(pad=0)
+            fig.canvas.draw()
+            data_type = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
             plt.close('all')
+            return data_angle, data_type
+        else:
+            return data_angle, None
